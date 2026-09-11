@@ -1,0 +1,71 @@
+import { useState } from 'react'
+import Sidebar from './Sidebar'
+import Navbar from './Navbar'
+
+export default function DashboardLayout({
+  activeRoute,
+  setActiveRoute,
+  onLogout,
+  user,
+  children
+}) {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [isDarkMode, setIsDarkMode] = useState(false)
+
+  const toggleSidebar = () => {
+    if (window.innerWidth < 1024) {
+      setIsMobileOpen(!isMobileOpen)
+    } else {
+      setIsSidebarCollapsed(!isSidebarCollapsed)
+    }
+  }
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode)
+    document.documentElement.classList.toggle('dark')
+  }
+
+  return (
+    <div className={`min-h-screen bg-[#F3F3F9] dark:bg-slate-950 font-['Poppins',sans-serif] ${isDarkMode ? 'dark text-slate-100' : ''}`}>
+      {/* Sidebar */}
+      <Sidebar
+        isCollapsed={isSidebarCollapsed}
+        activeRoute={activeRoute}
+        setActiveRoute={setActiveRoute}
+        isMobileOpen={isMobileOpen}
+        closeMobileSidebar={() => setIsMobileOpen(false)}
+      />
+
+      {/* Main Content Area */}
+      <div
+        className={`min-h-screen flex flex-col transition-all duration-300 ${
+          isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
+        }`}
+      >
+        {/* Top Navbar */}
+        <Navbar
+          isSidebarCollapsed={isSidebarCollapsed}
+          toggleSidebar={toggleSidebar}
+          isDarkMode={isDarkMode}
+          toggleDarkMode={toggleDarkMode}
+          onLogout={onLogout}
+          user={user}
+          setActiveRoute={setActiveRoute}
+        />
+
+
+        {/* Dynamic Page Content */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          {children}
+        </main>
+
+        {/* Velzon-style Footer */}
+        <footer className="h-14 bg-white dark:bg-slate-900 border-t border-gray-200/80 dark:border-slate-800 px-6 flex items-center justify-between text-xs text-gray-500 dark:text-slate-400 transition-colors">
+          <span>{new Date().getFullYear()} © Simcha.</span>
+          <span>Design &amp; Developed by Simcha Info Solutions</span>
+        </footer>
+      </div>
+    </div>
+  )
+}

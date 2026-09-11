@@ -20,11 +20,21 @@ app.use(cors({
 app.options('*', cors())
 app.use(express.json())
 
+// Ensure TiDB Database Connection in Serverless & Local environments
+app.use(async (req, res, next) => {
+  try {
+    await initDatabase()
+    next()
+  } catch (err) {
+    console.error('Serverless TiDB connection middleware error:', err)
+    res.status(500).json({ success: false, message: 'Database connection failed: ' + err.message })
+  }
+})
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Simcha Billing API is running smoothly!' })
 })
-
 
 // Routes
 app.use('/api/auth', authRoutes)

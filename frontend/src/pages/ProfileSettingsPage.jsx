@@ -16,12 +16,14 @@ import Swal from 'sweetalert2'
 import defaultPfp from '../assets/avatar/Deafult Pfp.jpg'
 import maleAvatar from '../assets/avatar/Male avatar.png'
 import femaleAvatar from '../assets/avatar/Female Avatar.png'
+import { API_ENDPOINTS } from '../config/api'
 
 const AVATAR_OPTIONS = [
   { id: 'default', label: 'Default', src: defaultPfp },
   { id: 'male', label: 'Male', src: maleAvatar },
   { id: 'female', label: 'Female', src: femaleAvatar }
 ]
+
 
 export default function ProfileSettingsPage({ user, onUpdateUser }) {
   const [isEditing, setIsEditing] = useState(false)
@@ -82,7 +84,7 @@ export default function ProfileSettingsPage({ user, onUpdateUser }) {
     setIsSaving(true)
     try {
       const token = localStorage.getItem('simcha_token') || sessionStorage.getItem('simcha_token')
-      const res = await fetch('/api/auth/profile', {
+      const res = await fetch(API_ENDPOINTS.PROFILE, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -95,6 +97,7 @@ export default function ProfileSettingsPage({ user, onUpdateUser }) {
           avatar: selectedAvatarId
         })
       })
+
 
       const data = await res.json()
 

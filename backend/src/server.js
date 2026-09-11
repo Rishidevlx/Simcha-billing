@@ -11,18 +11,20 @@ dotenv.config()
 const app = express()
 const PORT = process.env.PORT || 5000
 
-// Middlewares
+// Comprehensive CORS configuration to prevent any cross-domain CORS errors
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }))
+app.options('*', cors())
 app.use(express.json())
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Simcha Billing API is running smoothly!' })
 })
+
 
 // Routes
 app.use('/api/auth', authRoutes)

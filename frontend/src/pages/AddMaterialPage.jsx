@@ -1,18 +1,28 @@
 import { useState, useEffect } from 'react'
 import {
   Boxes,
+  Tag,
+  DollarSign,
   Layers,
-  IndianRupee,
-  Package,
+  FileText,
   Sliders,
   CheckCircle2,
-  PlusCircle,
+  AlertCircle,
   RotateCcw,
+  Sparkles,
+  ArrowLeft,
   Loader2,
+  ScanBarcode,
+  ShieldAlert,
+  Hash,
+  List,
+  IndianRupee,
+  Package,
   ListFilter
 } from 'lucide-react'
 import Swal from 'sweetalert2'
 import SearchableSelect from '../components/common/SearchableSelect'
+import { API_ENDPOINTS } from '../config/api'
 
 export default function AddMaterialPage({ editMaterialId = null, onSaved, setActiveRoute }) {
   // Form State
@@ -42,33 +52,32 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
 
   // Units list
   const unitOptions = [
-    { value: 'Nos', label: 'Nos (Numbers)' },
+    { value: 'Nos', label: 'Nos (Pieces)' },
     { value: 'Box', label: 'Box' },
-    { value: 'Meter', label: 'Meter (m)' },
+    { value: 'Meter', label: 'Meter' },
     { value: 'Kg', label: 'Kg (Kilogram)' },
-    { value: 'Litre', label: 'Litre (L)' },
-    { value: 'Pcs', label: 'Pcs (Pieces)' },
-    { value: 'Roll', label: 'Roll' },
-    { value: 'Packet', label: 'Packet' },
-    { value: 'Set', label: 'Set' }
+    { value: 'Litre', label: 'Litre' },
+    { value: 'Pack', label: 'Pack' },
+    { value: 'Set', label: 'Set' },
+    { value: 'Roll', label: 'Roll' }
   ]
 
   // Warranty options
   const warrantyOptions = [
     { value: 'No Warranty', label: 'No Warranty' },
-    { value: '1 Month', label: '1 Month' },
     { value: '3 Months', label: '3 Months' },
     { value: '6 Months', label: '6 Months' },
     { value: '1 Year', label: '1 Year' },
     { value: '2 Years', label: '2 Years' },
-    { value: '3 Years', label: '3 Years' }
+    { value: '3 Years', label: '3 Years' },
+    { value: '5 Years', label: '5 Years' }
   ]
 
   // Fetch Categories for dropdown
   const fetchCategories = async () => {
     try {
       setIsLoadingCategories(true)
-      const res = await fetch('/api/categories')
+      const res = await fetch(API_ENDPOINTS.CATEGORIES)
       const data = await res.json()
       if (data.success) {
         setCategories(
@@ -90,7 +99,7 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
   const fetchMaterialDetails = async (id) => {
     try {
       setIsLoadingDetails(true)
-      const res = await fetch(`/api/materials/${id}`)
+      const res = await fetch(API_ENDPOINTS.MATERIAL_BY_ID(id))
       const data = await res.json()
       if (data.success && data.material) {
         const m = data.material
@@ -105,8 +114,8 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
           mrp: m.mrp ? String(m.mrp) : '',
           hsn_code: m.hsn_code || '',
           tax_inclusive: Boolean(m.tax_inclusive),
-          opening_stock: m.opening_stock ? String(m.opening_stock) : '0',
-          reorder_level: m.reorder_level ? String(m.reorder_level) : '0',
+          opening_stock: m.opening_stock ? String(m.opening_stock) : '',
+          reorder_level: m.reorder_level ? String(m.reorder_level) : '',
           barcode: m.barcode || '',
           warranty: m.warranty || 'No Warranty',
           serial_tracking: Boolean(m.serial_tracking),
@@ -115,6 +124,12 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
       }
     } catch (err) {
       console.error('Failed to load material details:', err)
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to load material details for editing.',
+        confirmButtonColor: '#043486'
+      })
     } finally {
       setIsLoadingDetails(false)
     }
@@ -177,6 +192,25 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
     })
   }
 
+  // Auto Generate SKU Code
+  const handleGenerateSKU = () => {
+    if (!formData.name.trim()) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Tip',
+        text: 'Please enter Material Name first to generate SKU.',
+        confirmButtonColor: '#043486'
+      })
+      return
+    }
+    const clean = formData.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase()
+    const rand = Math.floor(1000 + Math.random() * 9000)
+    setFormData(prev => ({
+      ...prev,
+      code: `MAT-${clean}-${rand}`
+    }))
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -185,17 +219,17 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
       Swal.fire({
         icon: 'warning',
         title: 'Required Field',
-        text: 'Please enter Material Name.',
+        text: 'Material Name is mandatory.',
         confirmButtonColor: '#043486'
       })
       return
     }
 
-    if (!formData.selling_price || parseFloat(formData.selling_price) < 0) {
+    if (!formData.selling_price || parseFloat(formData.selling_price) <= 0) {
       Swal.fire({
         icon: 'warning',
-        title: 'Required Field',
-        text: 'Please enter a valid Selling Price.',
+        title: 'Invalid Selling Price',
+        text: 'Please enter a valid selling price greater than 0.',
         confirmButtonColor: '#043486'
       })
       return
@@ -203,7 +237,7 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
 
     setIsSubmitting(true)
     try {
-      const url = editMaterialId ? `/api/materials/${editMaterialId}` : '/api/materials'
+      const url = editMaterialId ? API_ENDPOINTS.MATERIAL_BY_ID(editMaterialId) : API_ENDPOINTS.MATERIALS
       const method = editMaterialId ? 'PUT' : 'POST'
 
       const res = await fetch(url, {

@@ -6,10 +6,11 @@ import Button from '../components/ui/Button'
 import Checkbox from '../components/ui/Checkbox'
 import logoImg from '../assets/Logo/Logo-bg-remove.png'
 import growthAnimation from '../assets/lottiefiles/growth-software.json'
+import { API_ENDPOINTS } from '../config/api'
 
 export default function LoginPage({ onLogin }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('admin@simcha.com')
+  const [password, setPassword] = useState('admin123')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
@@ -21,7 +22,7 @@ export default function LoginPage({ onLogin }) {
     setErrorMsg('')
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(API_ENDPOINTS.LOGIN, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

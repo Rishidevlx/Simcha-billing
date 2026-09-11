@@ -9,6 +9,7 @@ import {
   Loader2
 } from 'lucide-react'
 import Swal from 'sweetalert2'
+import { API_ENDPOINTS } from '../config/api'
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState([])
@@ -42,7 +43,7 @@ export default function CategoriesPage() {
   const fetchCategories = async () => {
     try {
       setIsLoading(true)
-      const res = await fetch('/api/categories')
+      const res = await fetch(API_ENDPOINTS.CATEGORIES)
       const data = await res.json()
       if (data.success) {
         setCategories(data.categories || [])
@@ -102,7 +103,7 @@ export default function CategoriesPage() {
 
     setIsSubmitting(true)
     try {
-      const url = editingId ? `/api/categories/${editingId}` : '/api/categories'
+      const url = editingId ? API_ENDPOINTS.CATEGORY_BY_ID(editingId) : API_ENDPOINTS.CATEGORIES
       const method = editingId ? 'PUT' : 'POST'
 
       const res = await fetch(url, {
@@ -156,12 +157,13 @@ export default function CategoriesPage() {
     if (!result.isConfirmed) return
 
     try {
-      const res = await fetch(`/api/categories/${id}`, { method: 'DELETE' })
+      const res = await fetch(API_ENDPOINTS.CATEGORY_BY_ID(id), { method: 'DELETE' })
       const data = await res.json()
 
       if (!res.ok || !data.success) {
         throw new Error(data.message || 'Failed to delete category.')
       }
+
 
       Swal.fire({
         icon: 'success',

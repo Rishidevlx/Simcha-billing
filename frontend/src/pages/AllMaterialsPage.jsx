@@ -19,6 +19,7 @@ import {
   ChevronsRight
 } from 'lucide-react'
 import Swal from 'sweetalert2'
+import { API_ENDPOINTS } from '../config/api'
 
 export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
   const [materials, setMaterials] = useState([])
@@ -42,7 +43,7 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
   const fetchMaterials = async () => {
     try {
       setIsLoading(true)
-      const res = await fetch('/api/materials')
+      const res = await fetch(API_ENDPOINTS.MATERIALS)
       const data = await res.json()
       if (data.success) {
         setMaterials(data.materials || [])
@@ -62,7 +63,7 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
 
   const fetchCategories = async () => {
     try {
-      const res = await fetch('/api/categories')
+      const res = await fetch(API_ENDPOINTS.CATEGORIES)
       const data = await res.json()
       if (data.success) {
         setCategories(data.categories || [])
@@ -135,14 +136,15 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
   const executePermanentDelete = async (ids) => {
     try {
       if (ids.length === 1) {
-        await fetch(`/api/materials/${ids[0]}`, { method: 'DELETE' })
+        await fetch(API_ENDPOINTS.MATERIAL_BY_ID(ids[0]), { method: 'DELETE' })
       } else {
-        await fetch('/api/materials/bulk-delete', {
+        await fetch(API_ENDPOINTS.MATERIAL_BULK_DELETE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids })
         })
       }
+
       setMaterials(prev => prev.filter(m => !ids.includes(m.id)))
     } catch (err) {
       console.error('Permanent delete failed:', err)

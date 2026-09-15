@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   TrendingUp, 
   Receipt, 
@@ -7,20 +7,125 @@ import {
   Plus, 
   ArrowRight,
   Eye,
+  Printer,
   Download,
   Construction,
   Layers,
-  Settings
+  Settings,
+  Sparkles
 } from 'lucide-react'
 import CategoriesPage from './CategoriesPage'
 import AddMaterialPage from './AddMaterialPage'
 import AllMaterialsPage from './AllMaterialsPage'
 import ProfileSettingsPage from './ProfileSettingsPage'
+import CreateBillPage from './CreateBillPage'
+import AllBillsPage from './AllBillsPage'
+import SystemSettingsPage from './SystemSettingsPage'
+import ConfigurationsSettingsPage from './ConfigurationsSettingsPage'
+import InvoiceModal from '../components/invoice/InvoiceModal'
+import { API_ENDPOINTS } from '../config/api'
 
 export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpdateUser }) {
   const [editingMaterialId, setEditingMaterialId] = useState(null)
+  const [dashboardStats, setDashboardStats] = useState({
+    totalRevenue: 2849,
+    totalBills: 1,
+    activeMaterials: 4,
+    pendingInvoices: 0
+  })
+  const [recentBills, setRecentBills] = useState([])
+  const [selectedBillForPreview, setSelectedBillForPreview] = useState(null)
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
+  const [settings, setSettings] = useState(null)
+
+  useEffect(() => {
+    if (activeRoute === 'dashboard') {
+      const fetchDashboardData = async () => {
+        try {
+          const [billsRes, matRes, settingsRes] = await Promise.all([
+            fetch(API_ENDPOINTS.BILLS),
+            fetch(API_ENDPOINTS.MATERIALS),
+            fetch(API_ENDPOINTS.SETTINGS)
+          ])
+          const billsData = await billsRes.json()
+          const matData = await matRes.json()
+          const settingsData = await settingsRes.json()
+
+          if (settingsData.success && settingsData.settings) {
+            setSettings(settingsData.settings)
+          }
+
+          if (billsData.success) {
+            const allBills = billsData.bills || []
+            const rev = allBills.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0)
+            const pending = allBills.filter(b => b.payment_status === 'Pending').length
+
+            setDashboardStats(prev => ({
+              ...prev,
+              totalRevenue: rev,
+              totalBills: allBills.length,
+              pendingInvoices: pending
+            }))
+
+            setRecentBills(
+              allBills.slice(0, 5).map(b => ({
+                id: b.id,
+                invoiceNumber: b.invoice_number,
+                customer: b.customer_name,
+                date: new Date(b.invoice_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                amount: `₹ ${parseFloat(b.total_amount).toLocaleString('en-IN')}`,
+                status: b.payment_status
+              }))
+            )
+          }
+
+          if (matData.success && matData.materials) {
+            setDashboardStats(prev => ({
+              ...prev,
+              activeMaterials: matData.materials.filter(m => m.status === 'Active').length
+            }))
+          }
+        } catch (err) {
+          console.error('Error fetching dashboard summary:', err)
+        }
+      }
+
+      fetchDashboardData()
+    }
+  }, [activeRoute])
+
+  const handleOpenBillModal = async (billId) => {
+    try {
+      setIsLoadingPreview(true)
+      const res = await fetch(API_ENDPOINTS.BILL_BY_ID(billId))
+      const data = await res.json()
+      if (data.success && data.bill) {
+        setSelectedBillForPreview(data.bill)
+      }
+    } catch (err) {
+      console.error('Error opening bill modal:', err)
+    } finally {
+      setIsLoadingPreview(false)
+    }
+  }
 
   // Route handlers for direct pages
+  if (activeRoute === 'create-bill') {
+    return <CreateBillPage setActiveRoute={setActiveRoute} />
+  }
+
+  if (activeRoute === 'all-bills' || activeRoute === 'bills') {
+    return <AllBillsPage setActiveRoute={setActiveRoute} />
+  }
+
+  if (activeRoute === 'system-settings') {
+    return <SystemSettingsPage />
+  }
+
+  if (activeRoute === 'configurations-settings') {
+    return <ConfigurationsSettingsPage setActiveRoute={setActiveRoute} />
+  }
+
   if (activeRoute === 'categories') {
     return <CategoriesPage />
   }
@@ -57,7 +162,6 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
     )
   }
 
-
   // Breadcrumb & Page Info mapper
   const getPageInfo = () => {
     switch (activeRoute) {
@@ -76,11 +180,11 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
 
   const { title, path, icon: RouteIcon } = getPageInfo()
 
-  // Sample data for overview on Dashboard
+  // Dynamic stats array
   const stats = [
     {
       title: 'TOTAL REVENUE',
-      value: '₹ 2,48,750',
+      value: `₹ ${dashboardStats.totalRevenue.toLocaleString('en-IN')}`,
       change: '+18.4%',
       isPositive: true,
       icon: TrendingUp,
@@ -88,37 +192,30 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
     },
     {
       title: 'TOTAL BILLS',
-      value: '384',
-      change: '+12.5%',
+      value: String(dashboardStats.totalBills),
+      change: '+1 new',
       isPositive: true,
       icon: Receipt,
       color: 'from-blue-600 to-cyan-600'
     },
     {
       title: 'ACTIVE MATERIALS',
-      value: '142',
-      change: '+4 new',
+      value: String(dashboardStats.activeMaterials),
+      change: 'In stock',
       isPositive: true,
       icon: Boxes,
       color: 'from-emerald-600 to-teal-600'
     },
     {
       title: 'PENDING INVOICES',
-      value: '18',
-      change: '₹ 34,200',
-      isPositive: false,
+      value: String(dashboardStats.pendingInvoices),
+      change: 'To collect',
+      isPositive: dashboardStats.pendingInvoices === 0,
       icon: Clock,
       color: 'from-amber-500 to-orange-600'
     }
   ]
 
-  const recentBills = [
-    { id: 'INV-2026-001', customer: 'Senthil Enterprises', date: '11 Sep 2026', amount: '₹ 18,450', status: 'Paid' },
-    { id: 'INV-2026-002', customer: 'Aroma Exports Pvt Ltd', date: '10 Sep 2026', amount: '₹ 42,000', status: 'Pending' },
-    { id: 'INV-2026-003', customer: 'Kavitha Textiles', date: '09 Sep 2026', amount: '₹ 9,200', status: 'Paid' },
-    { id: 'INV-2026-004', customer: 'Murugan Super Stores', date: '08 Sep 2026', amount: '₹ 27,600', status: 'Paid' },
-    { id: 'INV-2026-005', customer: 'Vignesh Hardware', date: '08 Sep 2026', amount: '₹ 14,800', status: 'Draft' }
-  ]
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -174,16 +271,18 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
             {stats.map((stat, index) => {
               const Icon = stat.icon
+              const targetRoute = index === 2 ? 'all-materials' : 'all-bills'
               return (
                 <div
                   key={index}
-                  className="bg-white dark:bg-slate-900 rounded-sm p-5 border border-gray-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-shadow duration-200 flex flex-col justify-between"
+                  onClick={() => setActiveRoute(targetRoute)}
+                  className="bg-white dark:bg-slate-900 rounded-sm p-5 border border-gray-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-[#043486]/40 dark:hover:border-blue-500/40 transition-all duration-200 flex flex-col justify-between cursor-pointer group"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-gray-400 dark:text-slate-400 tracking-wider">
+                    <span className="text-[11px] font-bold text-gray-400 dark:text-slate-400 tracking-wider group-hover:text-[#043486] dark:group-hover:text-blue-400 transition-colors">
                       {stat.title}
                     </span>
-                    <div className={`w-10 h-10 rounded-sm bg-gradient-to-tr ${stat.color} text-white flex items-center justify-center shadow-xs`}>
+                    <div className={`w-10 h-10 rounded-sm bg-gradient-to-tr ${stat.color} text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform`}>
                       <Icon size={18} />
                     </div>
                   </div>
@@ -234,7 +333,7 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
                   </button>
 
                   <button
-                    onClick={() => setActiveRoute('materials')}
+                    onClick={() => setActiveRoute('all-materials')}
                     className="w-full p-3.5 rounded-sm border border-gray-200 dark:border-slate-700 hover:border-[#0248BC] dark:hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-slate-800/50 flex items-center justify-between transition-all group cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
@@ -269,8 +368,11 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
 
               {/* Status Box */}
               <div className="mt-6 p-4 rounded-sm bg-gradient-to-r from-[#043486] to-[#0248BC] text-white shadow-xs">
-                <p className="text-xs font-semibold">Simcha Cloud Sync</p>
-                <p className="text-[11px] text-blue-100 mt-0.5">TiDB Serverless Connection: Ready</p>
+                <p className="text-xs font-semibold flex items-center gap-1.5">
+                  <Sparkles size={13} className="text-amber-300" />
+                  Simcha Cloud Sync
+                </p>
+                <p className="text-[11px] text-blue-100 mt-0.5">TiDB Serverless Connection: Ready &amp; Active</p>
               </div>
             </div>
 
@@ -307,43 +409,52 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-                      {recentBills.map((bill) => (
-                        <tr key={bill.id} className="hover:bg-gray-50/80 dark:hover:bg-slate-800/60 transition-colors">
-                          <td className="py-3.5 px-2 font-semibold text-[#043486] dark:text-blue-400">
-                            {bill.id}
-                          </td>
-                          <td className="py-3.5 px-2 text-[#292424] dark:text-white font-medium">
-                            {bill.customer}
-                          </td>
-                          <td className="py-3.5 px-2 text-gray-500 dark:text-slate-400">
-                            {bill.date}
-                          </td>
-                          <td className="py-3.5 px-2 font-bold text-[#292424] dark:text-white">
-                            {bill.amount}
-                          </td>
-                          <td className="py-3.5 px-2">
-                            <span className={`px-2.5 py-1 rounded-sm text-[10px] font-semibold ${
-                              bill.status === 'Paid'
-                                ? 'bg-emerald-100/70 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400'
-                                : bill.status === 'Pending'
-                                ? 'bg-amber-100/70 dark:bg-amber-950/70 text-amber-700 dark:text-amber-400'
-                                : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-                            }`}>
-                              {bill.status}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-2 text-right">
-                            <div className="flex items-center justify-end gap-1.5 text-gray-400 dark:text-slate-500">
-                              <button className="p-1 hover:text-[#043486] dark:hover:text-blue-400 transition-colors cursor-pointer" title="View Bill">
-                                <Eye size={15} />
-                              </button>
-                              <button className="p-1 hover:text-[#043486] dark:hover:text-blue-400 transition-colors cursor-pointer" title="Download PDF">
-                                <Download size={15} />
-                              </button>
-                            </div>
+                      {recentBills.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="text-center py-6 text-gray-400">
+                            No recent bills found. Create your first invoice!
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        recentBills.map((bill) => (
+                          <tr key={bill.id || bill.invoiceNumber} className="hover:bg-gray-50/80 dark:hover:bg-slate-800/60 transition-colors">
+                            <td className="py-3.5 px-2 font-semibold text-[#043486] dark:text-blue-400">
+                              {bill.invoiceNumber}
+                            </td>
+                            <td className="py-3.5 px-2 text-[#292424] dark:text-white font-medium">
+                              {bill.customer}
+                            </td>
+                            <td className="py-3.5 px-2 text-gray-500 dark:text-slate-400">
+                              {bill.date}
+                            </td>
+                            <td className="py-3.5 px-2 font-bold text-[#292424] dark:text-white">
+                              {bill.amount}
+                            </td>
+                            <td className="py-3.5 px-2">
+                              <span className={`px-2.5 py-1 rounded-sm text-[10px] font-semibold ${
+                                bill.status === 'Paid'
+                                  ? 'bg-emerald-100/70 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400'
+                                  : bill.status === 'Pending'
+                                  ? 'bg-amber-100/70 dark:bg-amber-950/70 text-amber-700 dark:text-amber-400'
+                                  : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
+                              }`}>
+                                {bill.status}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-2 text-right">
+                              <div className="flex items-center justify-end gap-1.5 text-gray-400 dark:text-slate-500">
+                                <button
+                                  onClick={() => handleOpenBillModal(bill.id)}
+                                  className="p-1 hover:text-[#043486] dark:hover:text-blue-400 transition-colors cursor-pointer"
+                                  title="View Invoice Preview & Print"
+                                >
+                                  <Eye size={15} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -352,6 +463,15 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
 
           </div>
         </>
+      )}
+
+      {/* Invoice Modal Preview */}
+      {selectedBillForPreview && (
+        <InvoiceModal
+          bill={selectedBillForPreview}
+          settings={settings}
+          onClose={() => setSelectedBillForPreview(null)}
+        />
       )}
 
     </div>

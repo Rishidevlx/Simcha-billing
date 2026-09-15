@@ -591,99 +591,78 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
           </table>
         </div>
 
-        {/* Pagination Footer (Matching Reference Layout) */}
-        {!isLoading && totalItems > 0 && (
-          <div className="p-3.5 border-t border-gray-200 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Exact Pagination Bar matching AllBillsPage */}
+        {!isLoading && (
+          <div className="px-6 py-3 bg-[#f8fafc] dark:bg-slate-950 border-t border-gray-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium text-gray-600 dark:text-slate-300">
             
-            {/* Left: Per Page Selector & Record Count */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <select
-                  value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value))}
-                  className="px-2.5 py-1.5 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-sm focus:outline-none focus:border-[#0248BC] cursor-pointer"
-                >
-                  <option value={5}>5</option>
-                  <option value={6}>6</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-                <span className="text-xs text-gray-500 dark:text-slate-400">per page</span>
-              </div>
-
-              <div className="text-xs text-gray-500 dark:text-slate-400 border-l border-gray-300 dark:border-slate-700 pl-3">
-                Showing <strong className="text-gray-700 dark:text-slate-200">{startIndex + 1}</strong> – <strong className="text-gray-700 dark:text-slate-200">{endIndex}</strong> of <strong className="text-[#043486] dark:text-blue-400">{totalItems}</strong> items
-              </div>
+            {/* Items Per Page Selector */}
+            <div className="flex items-center gap-2">
+              <span>Items per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value))
+                  setCurrentPage(1)
+                }}
+                className="px-2 py-1 font-semibold text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] cursor-pointer"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
             </div>
 
-            {/* Right: Page Navigation Numbers & Controls */}
-            <div className="flex items-center gap-1">
-              {/* First Page */}
-              <button
-                onClick={() => setCurrentPage(1)}
-                disabled={safeCurrentPage === 1}
-                title="First Page"
-                className="p-1.5 rounded-sm text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronsLeft size={15} />
-              </button>
+            {/* Item Count Summary (e.g. 1-10 of 100 items) */}
+            <div className="text-gray-500 dark:text-slate-400 font-mono text-xs">
+              {totalItems === 0 ? (
+                '0 of 0 items'
+              ) : (
+                <span>{startIndex + 1}-{endIndex} of {totalItems} items</span>
+              )}
+            </div>
 
-              {/* Prev Page */}
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={safeCurrentPage === 1}
-                title="Previous Page"
-                className="p-1.5 rounded-sm text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft size={15} />
-              </button>
+            {/* Page Selector & Prev / Next Arrows */}
+            <div className="flex items-center gap-3">
+              
+              {/* Page Select Dropdown */}
+              <div className="flex items-center gap-1.5">
+                <span>Page</span>
+                <select
+                  value={safeCurrentPage}
+                  onChange={(e) => setCurrentPage(Number(e.target.value))}
+                  className="px-2 py-1 font-semibold text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] cursor-pointer"
+                >
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+                <span>of {totalPages} pages</span>
+              </div>
 
-              {/* Number Buttons */}
-              {getPageNumbers().map((p, i) => {
-                if (p === '...') {
-                  return (
-                    <span key={`dots-${i}`} className="px-2 py-1 text-xs text-gray-400 dark:text-slate-500">
-                      ...
-                    </span>
-                  )
-                }
-                const isActive = p === safeCurrentPage
-                return (
-                  <button
-                    key={p}
-                    onClick={() => setCurrentPage(p)}
-                    className={`min-w-[28px] h-7 px-2 text-xs font-bold rounded-sm transition-colors cursor-pointer ${
-                      isActive
-                        ? 'bg-[#0248BC] text-white shadow-xs'
-                        : 'text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                )
-              })}
+              {/* Prev / Next Arrows */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={safeCurrentPage <= 1}
+                  className="p-1 border border-gray-300 dark:border-slate-700 rounded-none hover:bg-gray-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors text-gray-700 dark:text-slate-300"
+                  title="Previous Page"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={safeCurrentPage >= totalPages}
+                  className="p-1 border border-gray-300 dark:border-slate-700 rounded-none hover:bg-gray-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors text-gray-700 dark:text-slate-300"
+                  title="Next Page"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
 
-              {/* Next Page */}
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={safeCurrentPage === totalPages}
-                title="Next Page"
-                className="p-1.5 rounded-sm text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronRight size={15} />
-              </button>
-
-              {/* Last Page */}
-              <button
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={safeCurrentPage === totalPages}
-                title="Last Page"
-                className="p-1.5 rounded-sm text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronsRight size={15} />
-              </button>
             </div>
 
           </div>

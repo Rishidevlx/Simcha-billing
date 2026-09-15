@@ -30,7 +30,7 @@ export default function Sidebar({
   const [hoveredMenuId, setHoveredMenuId] = useState(null)
 
   useEffect(() => {
-    if (activeRoute === 'profile-settings' || activeRoute === 'system-settings') {
+    if (activeRoute === 'profile-settings' || activeRoute === 'system-settings' || activeRoute === 'configurations-settings') {
       setOpenMenus(prev => ({ ...prev, settings: true }))
     } else if (activeRoute === 'add-material' || activeRoute === 'all-materials') {
       setOpenMenus(prev => ({ ...prev, materials: true }))
@@ -86,7 +86,8 @@ export default function Sidebar({
       icon: Settings,
       subItems: [
         { id: 'profile-settings', title: 'Profile Settings' },
-        { id: 'system-settings', title: 'System Settings' }
+        { id: 'system-settings', title: 'System Settings' },
+        { id: 'configurations-settings', title: 'Configurations Settings' }
       ]
     }
   ]
@@ -209,14 +210,14 @@ export default function Sidebar({
                                 <button
                                   key={sub.id}
                                   onClick={() => handleItemClick(sub.id)}
-                                  className={`w-full text-left px-3 py-1.5 rounded-xs text-xs transition-all duration-150 flex items-center gap-2.5 cursor-pointer ${
+                                  className={`w-full text-left px-3 py-2 rounded-xs text-[13.5px] font-medium transition-all duration-150 flex items-center gap-2.5 cursor-pointer ${
                                     isSubActive
                                       ? 'bg-white/20 dark:bg-blue-600/20 text-white dark:text-blue-400 font-bold border border-white/20 dark:border-blue-500/30'
-                                      : 'text-blue-100/80 dark:text-slate-400 hover:text-white hover:bg-white/10 dark:hover:bg-slate-800/70 border border-transparent'
+                                      : 'text-blue-100/90 dark:text-slate-300 hover:text-white hover:bg-white/10 dark:hover:bg-slate-800/70 border border-transparent'
                                   }`}
                                 >
                                   <Circle
-                                    size={5}
+                                    size={6}
                                     className={isSubActive ? 'text-white fill-white dark:text-blue-400 dark:fill-blue-400' : 'text-blue-200/60 dark:text-slate-500 fill-blue-200/60 dark:fill-slate-500'}
                                   />
                                   <span>{sub.title}</span>
@@ -260,14 +261,14 @@ export default function Sidebar({
                                   <button
                                     key={sub.id}
                                     onClick={() => handleItemClick(sub.id)}
-                                    className={`w-full text-left px-3 py-1.5 rounded-xs text-xs font-medium transition-all duration-150 flex items-center gap-2.5 cursor-pointer ${
+                                    className={`w-full text-left px-3 py-2 rounded-xs text-[13.5px] font-medium transition-all duration-150 flex items-center gap-2.5 cursor-pointer ${
                                       isSubActive
                                         ? 'bg-white/25 dark:bg-blue-600/20 text-white dark:text-blue-400 font-bold border border-white/30 dark:border-blue-500/30'
                                         : 'text-blue-100 dark:text-slate-300 hover:bg-white/15 dark:hover:bg-slate-800 hover:text-white border border-transparent'
                                     }`}
                                   >
                                     <Circle
-                                      size={5}
+                                      size={6}
                                       className={isSubActive ? 'text-white fill-white dark:text-blue-400 dark:fill-blue-400' : 'text-blue-200/60 dark:text-slate-500 fill-blue-200/60 dark:fill-slate-500'}
                                     />
                                     <span>{sub.title}</span>

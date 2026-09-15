@@ -56,12 +56,12 @@ export default function Navbar({
   const currentAvatarSrc = user.avatar ? (AVATAR_MAP[user.avatar] || AVATAR_MAP.male) : AVATAR_MAP.male
 
   return (
-    <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200/80 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 transition-colors duration-200">
+    <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 transition-colors duration-200">
       {/* Left: Sidebar Toggle Button */}
       <div className="flex items-center gap-3">
         <button
           onClick={toggleSidebar}
-          className="p-2 rounded-xs text-gray-500 dark:text-slate-300 hover:text-[#043486] dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors focus:outline-none cursor-pointer"
+          className="p-2 rounded-lg text-gray-500 dark:text-slate-400 hover:text-[#043486] dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors focus:outline-none cursor-pointer"
           aria-label="Toggle sidebar"
         >
           <Menu size={20} />
@@ -74,7 +74,7 @@ export default function Navbar({
         <button
           onClick={handleFullscreenToggle}
           title={isFullscreen ? "Exit Fullscreen" : "Toggle Fullscreen"}
-          className="p-2.5 rounded-xs text-gray-500 dark:text-slate-300 hover:text-[#043486] dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors focus:outline-none cursor-pointer"
+          className="p-2.5 rounded-lg text-gray-500 dark:text-slate-400 hover:text-[#043486] dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors focus:outline-none cursor-pointer"
         >
           {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
         </button>
@@ -83,13 +83,15 @@ export default function Navbar({
         <button
           onClick={toggleDarkMode}
           title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          className="p-2.5 rounded-xs text-gray-500 dark:text-slate-300 hover:text-[#043486] dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors focus:outline-none cursor-pointer"
+          className="p-2.5 rounded-lg text-gray-500 dark:text-slate-400 hover:text-[#043486] dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors focus:outline-none cursor-pointer"
         >
           {isDarkMode ? <Sun size={20} className="text-amber-400" /> : <Moon size={20} />}
         </button>
 
         {/* Profile Dropdown */}
         <div className="relative ml-2">
+
+
           <button
             onClick={() => setIsProfileOpen(!isProfileOpen)}
             className="flex items-center gap-3 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors focus:outline-none cursor-pointer"

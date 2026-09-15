@@ -5,6 +5,8 @@ import { initDatabase } from '../backend/src/config/db.js'
 import authRoutes from '../backend/src/routes/authRoutes.js'
 import categoryRoutes from '../backend/src/routes/categoryRoutes.js'
 import materialRoutes from '../backend/src/routes/materialRoutes.js'
+import settingsRoutes from '../backend/src/routes/settingsRoutes.js'
+import billRoutes from '../backend/src/routes/billRoutes.js'
 
 dotenv.config()
 
@@ -41,6 +43,9 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/categories', categoryRoutes)
 app.use('/api/materials', materialRoutes)
+app.use('/api/settings', settingsRoutes)
+app.use('/api/bills', billRoutes)
+
 
 // Error Handler
 app.use((err, req, res, next) => {

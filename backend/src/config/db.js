@@ -127,11 +127,181 @@ export async function initDatabase() {
         if (matCount[0].count === 0) {
           await pool.query(`
             INSERT INTO materials (name, code, category_id, brand, unit, description, selling_price, mrp, hsn_code, tax_inclusive, opening_stock, reorder_level, barcode, warranty, serial_tracking, status) VALUES 
-            ('Cotton Fabric Rolls 100m', 'MAT-CTN-01', 2, 'Simcha Textiles', 'Meter', '100% Pure Cotton fabric for apparel', 450.00, 520.00, '5208', true, 120, 20, '8901234567890', 'No Warranty', false, 'Active'),
+            ('Logitech H390 USB Headphone', 'MAT-LOG-01', 1, 'Logitech', 'NOS', 'Comfortable USB Headset with noise-canceling mic', 2414.41, 2849.00, '851830', false, 50, 10, '8901234567890', '1 Year', true, 'Active'),
+            ('Cotton Fabric Rolls 100m', 'MAT-CTN-01', 2, 'Simcha Textiles', 'Meter', '100% Pure Cotton fabric for apparel', 450.00, 520.00, '5208', true, 120, 20, '8901234567891', 'No Warranty', false, 'Active'),
             ('Heavy Duty Cardboard Box (Large)', 'MAT-PKG-02', 3, 'PackPro', 'Box', 'Corrugated heavy grade carton packaging', 85.00, 110.00, '4819', false, 500, 50, '8909876543210', 'No Warranty', false, 'Active'),
             ('Stainless Steel Screws 100pcs Pack', 'MAT-HDW-03', 4, 'Apex Hardware', 'Nos', 'Grade 304 anti-rust screws', 280.00, 350.00, '7318', true, 80, 15, '8904567891234', '6 Months', false, 'Active')
           `)
           console.log('✨ Seeded sample materials.')
+        }
+
+        // Step 9: Create Settings table if not exists
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS settings (
+            id INT PRIMARY KEY DEFAULT 1,
+            company_name VARCHAR(200) NOT NULL DEFAULT 'SIMCHA INFO SOLUTIONS',
+            address TEXT NOT NULL,
+            phone VARCHAR(50) NOT NULL DEFAULT '8122022060',
+            email VARCHAR(191) NOT NULL DEFAULT 'simchainfosolutions@gmail.com',
+            gstin VARCHAR(50) NOT NULL DEFAULT '33GEZPM1178G1ZY',
+            bank_name VARCHAR(100) DEFAULT 'Canara Bank',
+            account_name VARCHAR(150) DEFAULT 'Simcha Info Solutions',
+            account_no VARCHAR(100) DEFAULT '120041754011',
+            ifsc_code VARCHAR(50) DEFAULT 'CNRB0002732',
+            branch VARCHAR(100) DEFAULT 'Peelamedu',
+            terms_conditions TEXT,
+            cgst_rate DECIMAL(5, 2) DEFAULT 9.00,
+            sgst_rate DECIMAL(5, 2) DEFAULT 9.00,
+            igst_rate DECIMAL(5, 2) DEFAULT 18.00,
+            invoice_prefix VARCHAR(20) DEFAULT 'INV-',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+        console.log('✅ "settings" table ready.')
+
+        // Step 10: Seed initial Settings if empty
+        const [settingsCount] = await pool.query('SELECT COUNT(*) as count FROM settings')
+        if (settingsCount[0].count === 0) {
+          const defaultTerms = JSON.stringify([
+            'Warranty as per manufacturer’s norms & should be claimed directly.',
+            'Warranty claim takes 1 to 8 weeks.',
+            'Please carry invoice copy for warranty.',
+            'Goods Once Sold will not be taken back or exchanged.'
+          ])
+          await pool.query(`
+            INSERT INTO settings (
+              id, company_name, address, phone, email, gstin,
+              bank_name, account_name, account_no, ifsc_code, branch,
+              terms_conditions, cgst_rate, sgst_rate, igst_rate, invoice_prefix
+            ) VALUES (
+              1, 'SIMCHA INFO SOLUTIONS',
+              '7A3, Thulasi Ammal Layout 2nd Street, Lakshmipuram, Peelamedu Post, Coimbatore - 641 004.',
+              '8122022060', 'simchainfosolutions@gmail.com', '33GEZPM1178G1ZY',
+              'Canara Bank', 'Simcha Info Solutions', '120041754011', 'CNRB0002732', 'Peelamedu',
+              ?, 9.00, 9.00, 18.00, 'INV-'
+            )
+          `, [defaultTerms])
+          console.log('✨ Seeded default system & company settings.')
+        }
+
+        // Step 11: Create Bills table if not exists
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS bills (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            invoice_number VARCHAR(100) UNIQUE NOT NULL,
+            invoice_date DATE NOT NULL,
+            invoice_type ENUM('NON_GST', 'GST') DEFAULT 'NON_GST',
+            copy_type ENUM('ORIGINAL', 'DUPLICATE', 'TRIPLICATE') DEFAULT 'ORIGINAL',
+            customer_name VARCHAR(200) NOT NULL,
+            customer_phone VARCHAR(50),
+            customer_address TEXT,
+            customer_gstin VARCHAR(50),
+            place_of_supply VARCHAR(100) DEFAULT '33-Tamil Nadu',
+            taxable_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            cgst_rate DECIMAL(5, 2) DEFAULT 9.00,
+            cgst_amount DECIMAL(12, 2) DEFAULT 0.00,
+            sgst_rate DECIMAL(5, 2) DEFAULT 9.00,
+            sgst_amount DECIMAL(12, 2) DEFAULT 0.00,
+            igst_rate DECIMAL(5, 2) DEFAULT 18.00,
+            igst_amount DECIMAL(12, 2) DEFAULT 0.00,
+            total_tax DECIMAL(12, 2) DEFAULT 0.00,
+            round_off DECIMAL(8, 2) DEFAULT 0.00,
+            total_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            amount_in_words TEXT,
+            payment_mode ENUM('Cash', 'UPI', 'Bank Transfer', 'Card', 'Credit') DEFAULT 'Cash',
+            payment_status ENUM('Paid', 'Partial', 'Pending') DEFAULT 'Paid',
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+        console.log('✅ "bills" table ready.')
+
+        // Step 12: Create Bill Items table if not exists
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS bill_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            bill_id INT NOT NULL,
+            material_id INT NULL,
+            item_name VARCHAR(255) NOT NULL,
+            serial_number VARCHAR(150),
+            hsn_code VARCHAR(50),
+            quantity DECIMAL(10, 2) NOT NULL DEFAULT 1.00,
+            unit VARCHAR(50) DEFAULT 'NOS',
+            rate DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            tax_rate DECIMAL(5, 2) DEFAULT 18.00,
+            tax_amount DECIMAL(12, 2) DEFAULT 0.00,
+            amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
+            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+        console.log('✅ "bill_items" table ready.')
+
+        // Step 13: Seed sample initial bill if empty
+        const [billCount] = await pool.query('SELECT COUNT(*) as count FROM bills')
+        if (billCount[0].count === 0) {
+          const [billRes] = await pool.query(`
+            INSERT INTO bills (
+              invoice_number, invoice_date, invoice_type, copy_type,
+              customer_name, customer_phone, customer_address, place_of_supply,
+              taxable_amount, cgst_rate, cgst_amount, sgst_rate, sgst_amount, igst_amount,
+              total_tax, round_off, total_amount, amount_in_words, payment_mode, payment_status
+            ) VALUES (
+              'INV-92026002', '2026-09-11', 'NON_GST', 'DUPLICATE',
+              'Mrs. Sathya Shree', '8870551040', '11A, Sivakami Nagar, Ranganathapuram, Coimbatore - 641 402.', '33-Tamil Nadu',
+              2414.41, 9.00, 217.30, 9.00, 217.30, 0.00,
+              434.59, 0.00, 2849.00, 'Two Thousand Eight Hundred Forty Nine Rupees Only', 'Cash', 'Paid'
+            )
+          `)
+          
+          await pool.query(`
+            INSERT INTO bill_items (
+              bill_id, item_name, serial_number, hsn_code, quantity, unit, rate, tax_rate, tax_amount, amount
+            ) VALUES (
+              ?, 'Logitech H390 USB Headphone', '2528ME12EZG9', '851830', 1.00, 'NOS', 2414.41, 18.00, 434.59, 2849.00
+            )
+          `, [billRes.insertId])
+          console.log('✨ Seeded sample initial invoice: INV-92026002 (Mrs. Sathya Shree)')
+        }
+
+        // Step 14: Create email_configs table if not exists
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS email_configs (
+            id INT PRIMARY KEY DEFAULT 1,
+            smtp_host VARCHAR(150) DEFAULT 'smtp.gmail.com',
+            smtp_port INT DEFAULT 465,
+            smtp_secure BOOLEAN DEFAULT TRUE,
+            smtp_user VARCHAR(191) DEFAULT 'simchainfosolutions@gmail.com',
+            smtp_pass VARCHAR(255) DEFAULT '',
+            sender_name VARCHAR(150) DEFAULT 'SIMCHA INFO SOLUTIONS',
+            recipient_email VARCHAR(191) DEFAULT 'simchainfosolutions@gmail.com',
+            auto_email_on_create BOOLEAN DEFAULT TRUE,
+            email_subject VARCHAR(255) DEFAULT 'New Tax Invoice Generated - {invoice_number}',
+            email_body TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+        console.log('✅ "email_configs" table ready.')
+
+        // Seed initial email config if empty
+        const [emailConfigCount] = await pool.query('SELECT COUNT(*) as count FROM email_configs')
+        if (emailConfigCount[0].count === 0) {
+          await pool.query(`
+            INSERT INTO email_configs (
+              id, smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass,
+              sender_name, recipient_email, auto_email_on_create, email_subject, email_body
+            ) VALUES (
+              1, 'smtp.gmail.com', 465, true, 'simchainfosolutions@gmail.com', '',
+              'SIMCHA INFO SOLUTIONS', 'simchainfosolutions@gmail.com', true,
+              'New Tax Invoice Generated - {invoice_number}',
+              'Dear Customer / Team,\n\nPlease find attached the official Tax Invoice generated from Simcha Info Solutions Billing System.\n\nThank you for doing business with us!'
+            )
+          `)
+          console.log('✨ Seeded default email configurations.')
         }
 
         return pool
@@ -161,3 +331,4 @@ export function getPool() {
   }
   return pool
 }
+

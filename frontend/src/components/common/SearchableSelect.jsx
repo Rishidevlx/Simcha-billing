@@ -13,8 +13,10 @@ export default function SearchableSelect({
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const [inputText, setInputText] = useState('')
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
   const containerRef = useRef(null)
   const inputRef = useRef(null)
+  const optionsListRef = useRef(null)
 
   // Normalize options to { value, label, subLabel }
   const normalizedOptions = options.map(opt => {
@@ -40,6 +42,11 @@ export default function SearchableSelect({
     (opt.subLabel && opt.subLabel.toLowerCase().includes((inputText || '').toLowerCase()))
   )
 
+  // Reset highlightedIndex whenever filtered options change
+  useEffect(() => {
+    setHighlightedIndex(0)
+  }, [inputText])
+
   // Close when clicking outside & handle blur reconciliation
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -58,6 +65,7 @@ export default function SearchableSelect({
     const text = e.target.value
     setInputText(text)
     setIsOpen(true)
+    setHighlightedIndex(0)
 
     // Check if typed text matches exactly any option
     const exactMatch = normalizedOptions.find(
@@ -71,6 +79,7 @@ export default function SearchableSelect({
   }
 
   const handleSelect = (opt) => {
+    if (!opt) return
     setInputText(opt.label)
     if (onChange) {
       onChange(opt.value)
@@ -86,6 +95,38 @@ export default function SearchableSelect({
     }
     inputRef.current?.focus()
     setIsOpen(true)
+  }
+
+  // Handle Keyboard Navigation (ArrowUp, ArrowDown, Enter, Escape)
+  const handleKeyDown = (e) => {
+    if (disabled) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (!isOpen) {
+        setIsOpen(true)
+      } else {
+        setHighlightedIndex(prev => (prev + 1) % (filteredOptions.length || 1))
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (!isOpen) {
+        setIsOpen(true)
+      } else {
+        setHighlightedIndex(prev => (prev - 1 + (filteredOptions.length || 1)) % (filteredOptions.length || 1))
+      }
+    } else if (e.key === 'Enter') {
+      if (isOpen && filteredOptions.length > 0) {
+        e.preventDefault()
+        e.stopPropagation()
+        const selectedOpt = filteredOptions[highlightedIndex] || filteredOptions[0]
+        if (selectedOpt) {
+          handleSelect(selectedOpt)
+        }
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false)
+    }
   }
 
   return (
@@ -106,9 +147,10 @@ export default function SearchableSelect({
           disabled={disabled}
           value={inputText}
           onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
           onFocus={() => !disabled && setIsOpen(true)}
           placeholder={placeholder}
-          className={`w-full px-3.5 py-2.5 pr-14 text-xs sm:text-sm text-[#292424] dark:text-white rounded-sm border transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 ${
+          className={`w-full px-3.5 py-2.5 pr-14 text-xs sm:text-sm text-[#292424] dark:text-white rounded-none border transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 ${
             disabled
               ? 'bg-gray-100 dark:bg-slate-900 border-gray-200 dark:border-slate-800 text-gray-400 cursor-not-allowed'
               : isOpen
@@ -123,7 +165,7 @@ export default function SearchableSelect({
             <button
               type="button"
               onClick={handleClear}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xs hover:text-gray-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-none hover:text-gray-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
               title="Clear"
             >
               <X size={13} />
@@ -140,7 +182,7 @@ export default function SearchableSelect({
                 if (!isOpen) inputRef.current?.focus()
               }
             }}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xs hover:text-[#0248BC] dark:hover:text-blue-400 transition-colors cursor-pointer"
+            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-none hover:text-[#0248BC] dark:hover:text-blue-400 transition-colors cursor-pointer"
           >
             <ChevronDown
               size={15}
@@ -152,26 +194,33 @@ export default function SearchableSelect({
 
       {/* Dropdown Options List */}
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-sm shadow-xl max-h-56 overflow-y-auto p-1 space-y-0.5 animate-in fade-in zoom-in-95 duration-150">
+        <div 
+          ref={optionsListRef}
+          className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-none shadow-xl max-h-56 overflow-y-auto p-1 space-y-0.5 animate-in fade-in zoom-in-95 duration-150"
+        >
           {filteredOptions.length === 0 ? (
             <div className="px-3 py-3 text-center text-xs text-gray-400 dark:text-slate-500">
               No matching categories found
             </div>
           ) : (
-            filteredOptions.map((opt) => {
+            filteredOptions.map((opt, idx) => {
               const isSelected = String(opt.value) === String(value)
+              const isHighlighted = idx === highlightedIndex
               return (
                 <button
                   key={opt.value}
                   type="button"
+                  onMouseEnter={() => setHighlightedIndex(idx)}
                   onMouseDown={(e) => {
                     // onMouseDown prevents input blur before selection
                     e.preventDefault()
                     handleSelect(opt)
                   }}
-                  className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xs transition-colors cursor-pointer text-left ${
+                  className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-none transition-colors cursor-pointer text-left ${
                     isSelected
                       ? 'bg-blue-50 dark:bg-blue-950/50 text-[#043486] dark:text-blue-300 font-bold border border-blue-200 dark:border-blue-900/60'
+                      : isHighlighted
+                      ? 'bg-gray-100 dark:bg-slate-800 text-[#043486] dark:text-blue-400'
                       : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-[#043486] dark:hover:text-blue-400'
                   }`}
                 >

@@ -72,3 +72,58 @@ body {
   animation: smooth-wave 6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
   will-change: transform;
 }
+
+/* Hide print container on screen */
+#invoice-print-wrapper {
+  display: none;
+}
+
+/* Pixel-Perfect A4 Print Stylesheet */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html, body {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #292424 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Hide all app chrome, navigation, forms, sidebars */
+  #root,
+  .swal2-container {
+    display: none !important;
+  }
+  
+  /* Show ONLY the printable invoice wrapper */
+  #invoice-print-wrapper {
+    display: block !important;
+    position: static !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  #invoice-printable-area {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 auto !important;
+    padding: 8mm 12mm !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+}

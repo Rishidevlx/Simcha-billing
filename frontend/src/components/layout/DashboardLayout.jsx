@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
 import Sidebar from './Sidebar'
 import Navbar from './Navbar'
 
@@ -11,7 +12,19 @@ export default function DashboardLayout({
 }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem('simcha_theme') === 'dark' || document.documentElement.classList.contains('dark')
+  })
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark')
+      localStorage.setItem('simcha_theme', 'dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+      localStorage.setItem('simcha_theme', 'light')
+    }
+  }, [isDarkMode])
 
   const toggleSidebar = () => {
     if (window.innerWidth < 1024) {
@@ -22,12 +35,11 @@ export default function DashboardLayout({
   }
 
   const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode)
-    document.documentElement.classList.toggle('dark')
+    setIsDarkMode(prev => !prev)
   }
 
   return (
-    <div className={`min-h-screen bg-[#F3F3F9] dark:bg-slate-950 font-['Poppins',sans-serif] ${isDarkMode ? 'dark text-slate-100' : ''}`}>
+    <div className={`min-h-screen bg-[#F3F3F9] dark:bg-slate-950 font-['Poppins',sans-serif] ${isDarkMode ? 'dark text-slate-100' : 'text-[#292424]'}`}>
       {/* Sidebar */}
       <Sidebar
         isCollapsed={isSidebarCollapsed}
@@ -55,6 +67,8 @@ export default function DashboardLayout({
         />
 
 
+
+
         {/* Dynamic Page Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           {children}
@@ -63,7 +77,17 @@ export default function DashboardLayout({
         {/* Velzon-style Footer */}
         <footer className="h-14 bg-white dark:bg-slate-900 border-t border-gray-200/80 dark:border-slate-800 px-6 flex items-center justify-between text-xs text-gray-500 dark:text-slate-400 transition-colors">
           <span>{new Date().getFullYear()} © Simcha.</span>
-          <span>Design &amp; Developed by Simcha Info Solutions</span>
+          <span>
+            Design &amp; Developed by{' '}
+            <a
+              href="https://nextskilltechnologies.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#043486] dark:text-blue-400 hover:underline font-semibold"
+            >
+              Nextskill Technologies
+            </a>
+          </span>
         </footer>
       </div>
     </div>

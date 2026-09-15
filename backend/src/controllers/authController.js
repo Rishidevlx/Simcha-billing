@@ -162,3 +162,69 @@ export async function updateProfile(req, res) {
   }
 }
 
+// Change User Password
+export async function changePassword(req, res) {
+  try {
+    const { oldPassword, newPassword } = req.body
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide both current and new password.'
+      })
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters long.'
+      })
+    }
+
+    const pool = getPool()
+    let userId = 1
+
+    const authHeader = req.headers.authorization
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1]
+        const decoded = jwt.verify(token, JWT_SECRET)
+        userId = decoded.id
+      } catch (err) {
+        // fallback
+      }
+    }
+
+    const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [userId])
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.'
+      })
+    }
+
+    const user = rows[0]
+    const isMatch = await bcrypt.compare(oldPassword, user.password)
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: 'Incorrect current password. Please try again.'
+      })
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10)
+    await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, userId])
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password changed successfully!'
+    })
+  } catch (error) {
+    console.error('Change password error:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to change password.'
+    })
+  }
+}
+

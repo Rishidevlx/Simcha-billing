@@ -7,6 +7,7 @@ import categoryRoutes from '../backend/src/routes/categoryRoutes.js'
 import materialRoutes from '../backend/src/routes/materialRoutes.js'
 import settingsRoutes from '../backend/src/routes/settingsRoutes.js'
 import billRoutes from '../backend/src/routes/billRoutes.js'
+import inwardRoutes from '../backend/src/routes/inwardRoutes.js'
 
 dotenv.config()
 
@@ -45,6 +46,7 @@ app.use('/api/categories', categoryRoutes)
 app.use('/api/materials', materialRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/bills', billRoutes)
+app.use('/api/inwards', inwardRoutes)
 
 
 // Error Handler

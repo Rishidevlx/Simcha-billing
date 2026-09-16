@@ -40,6 +40,7 @@ export default function ConfigurationsSettingsPage() {
     sender_name: 'SIMCHA INFO SOLUTIONS',
     recipient_email: '',
     auto_email_on_create: true,
+    email_customer_copy: true,
     email_subject: 'New Tax Invoice Generated - {invoice_number}',
     email_body: 'Dear Customer / Team,\n\nPlease find attached the official Tax Invoice generated from Simcha Info Solutions Billing System.\n\nThank you for doing business with us!'
   })
@@ -63,6 +64,7 @@ export default function ConfigurationsSettingsPage() {
             sender_name: data.config.sender_name || 'SIMCHA INFO SOLUTIONS',
             recipient_email: data.config.recipient_email || data.config.smtp_user || '',
             auto_email_on_create: data.config.auto_email_on_create !== undefined ? Boolean(data.config.auto_email_on_create) : true,
+            email_customer_copy: data.config.email_customer_copy !== undefined ? Boolean(data.config.email_customer_copy) : true,
             email_subject: data.config.email_subject || 'New Tax Invoice Generated - {invoice_number}',
             email_body: data.config.email_body || ''
           }
@@ -109,6 +111,32 @@ export default function ConfigurationsSettingsPage() {
       })
     } catch (err) {
       console.error('Failed to update toggle:', err)
+    }
+  }
+
+  // Toggle Customer Copy directly and save
+  const handleToggleCustomerCopy = async (checked) => {
+    const updated = { ...formData, email_customer_copy: checked }
+    setFormData(updated)
+    try {
+      await fetch(API_ENDPOINTS.EMAIL_CONFIG, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      })
+      setOriginalData(updated)
+      Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true
+      }).fire({
+        icon: 'success',
+        title: checked ? 'Customer Email Dispatch Enabled' : 'Customer Email Dispatch Disabled'
+      })
+    } catch (err) {
+      console.error('Failed to update customer copy toggle:', err)
     }
   }
 
@@ -279,9 +307,6 @@ export default function ConfigurationsSettingsPage() {
             <h1 className="text-xl font-bold text-[#292424] dark:text-white uppercase tracking-wide">
               Configurations Settings
             </h1>
-            <span className="px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-[10px] font-bold uppercase tracking-wider">
-              Live Module
-            </span>
           </div>
           <p className="text-xs text-gray-500 dark:text-slate-400">
             Configure SMTP credentials to automatically generate &amp; email PDF invoices upon bill creation (CTRL+Enter / Save).
@@ -310,43 +335,91 @@ export default function ConfigurationsSettingsPage() {
         </div>
       </div>
 
-      {/* 2. Automated Trigger Status & Switch (Clean Standard Rounded Pill Toggle) */}
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-none border border-gray-200 dark:border-slate-800 shadow-xs transition-colors">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* 2. Automated Trigger Status & Switches (Clean Boxie Layout) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
+        {/* Toggle 1: Auto-Dispatch on Bill Creation */}
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-none border border-gray-200 dark:border-slate-800 shadow-xs flex flex-col justify-between gap-4 transition-colors">
           <div className="flex items-start gap-3.5">
             <div className="p-2.5 bg-blue-50 dark:bg-blue-950 text-[#043486] dark:text-blue-400 border border-blue-200 dark:border-blue-900 shrink-0">
-              <Mail size={22} />
+              <Mail size={20} />
             </div>
             <div>
               <h3 className="text-sm font-bold text-[#292424] dark:text-white">
-                Auto-Dispatch Invoice PDF on Bill Generation
+                Auto-Dispatch on Bill Generation
               </h3>
-              <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 max-w-xl">
-                When enabled, whenever a bill is generated (via <strong>"Save &amp; Generate Invoice"</strong> or shortcut <strong>CTRL + ENTER</strong>), the system will automatically create the invoice PDF and send it to the configured recipient email address.
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-relaxed">
+                When enabled, saving a bill (or shortcut <strong>CTRL + ENTER</strong>) automatically creates and sends the invoice PDF to the admin/accountant recipient.
               </p>
             </div>
           </div>
 
-          {/* Standard Smooth Rounded Pill Toggle */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => handleToggleAutoEmail(!formData.auto_email_on_create)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                formData.auto_email_on_create ? 'bg-[#043486]' : 'bg-gray-300 dark:bg-slate-700'
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                  formData.auto_email_on_create ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-            <span className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wide min-w-[65px]">
-              {formData.auto_email_on_create ? 'Enabled' : 'Disabled'}
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-slate-800">
+            <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+              Status:
             </span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleToggleAutoEmail(!formData.auto_email_on_create)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  formData.auto_email_on_create ? 'bg-[#043486]' : 'bg-gray-300 dark:bg-slate-700'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    formData.auto_email_on_create ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+              <span className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wide min-w-[65px]">
+                {formData.auto_email_on_create ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
           </div>
         </div>
+
+        {/* Toggle 2: Send Copy to Customer Email */}
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-none border border-gray-200 dark:border-slate-800 shadow-xs flex flex-col justify-between gap-4 transition-colors">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900 shrink-0">
+              <Send size={20} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-[#292424] dark:text-white">
+                Send Copy to Customer Email
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-relaxed">
+                When enabled, if customer email is provided in <strong>Outward</strong>, the invoice PDF is automatically emailed directly to the customer as well.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-slate-800">
+            <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+              Customer Copy:
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleToggleCustomerCopy(!formData.email_customer_copy)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  formData.email_customer_copy ? 'bg-[#0f766e]' : 'bg-gray-300 dark:bg-slate-700'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    formData.email_customer_copy ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+              <span className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wide min-w-[65px]">
+                {formData.email_customer_copy ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* 3. SMTP Server & Recipient Forms */}
@@ -641,8 +714,14 @@ export default function ConfigurationsSettingsPage() {
               Dispatch Summary:
             </p>
             <div className="text-[11px] text-gray-600 dark:text-slate-400 space-y-1">
-              <div><strong>From:</strong> {formData.smtp_user || '(Not configured)'}</div>
-              <div><strong>To:</strong> {formData.recipient_email || formData.smtp_user || '(Not configured)'}</div>
+              <div><strong>From (Sender):</strong> {formData.smtp_user || '(Not configured)'}</div>
+              <div><strong>Admin Copy To:</strong> {formData.recipient_email || formData.smtp_user || '(Not configured)'}</div>
+              <div>
+                <strong>Customer Copy:</strong>{' '}
+                <span className={formData.email_customer_copy ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-gray-400 font-semibold'}>
+                  {formData.email_customer_copy ? 'Enabled (Auto-sends to customer if email is provided in Outward Bill)' : 'Disabled'}
+                </span>
+              </div>
               <div><strong>Attachment:</strong> <span className="font-mono text-[#043486] dark:text-blue-400 font-bold">Invoice_INV-XXXX-XX.pdf</span></div>
             </div>
           </div>

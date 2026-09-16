@@ -5,12 +5,14 @@ import {
   createMaterial,
   updateMaterial,
   deleteMaterial,
-  bulkDeleteMaterials
+  bulkDeleteMaterials,
+  verifySerialNumber
 } from '../controllers/materialController.js'
 
 const router = express.Router()
 
 router.get('/', getMaterials)
+router.get('/verify-serial/:serialNumber', verifySerialNumber)
 router.get('/:id', getMaterialById)
 router.post('/', createMaterial)
 router.post('/bulk-delete', bulkDeleteMaterials)

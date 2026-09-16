@@ -19,6 +19,8 @@ import AddMaterialPage from './AddMaterialPage'
 import AllMaterialsPage from './AllMaterialsPage'
 import ProfileSettingsPage from './ProfileSettingsPage'
 import CreateBillPage from './CreateBillPage'
+import InwardBillPage from './InwardBillPage'
+import InwardReportsPage from './InwardReportsPage'
 import AllBillsPage from './AllBillsPage'
 import SystemSettingsPage from './SystemSettingsPage'
 import ConfigurationsSettingsPage from './ConfigurationsSettingsPage'
@@ -110,6 +112,14 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
   }
 
   // Route handlers for direct pages
+  if (activeRoute === 'inward') {
+    return <InwardBillPage setActiveRoute={setActiveRoute} />
+  }
+
+  if (activeRoute === 'inward-reports') {
+    return <InwardReportsPage setActiveRoute={setActiveRoute} />
+  }
+
   if (activeRoute === 'create-bill') {
     return <CreateBillPage setActiveRoute={setActiveRoute} />
   }
@@ -165,6 +175,8 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
   // Breadcrumb & Page Info mapper
   const getPageInfo = () => {
     switch (activeRoute) {
+      case 'inward':
+        return { title: 'INWARD BILL', path: ['Bills', 'Inward'], icon: Receipt }
       case 'create-bill':
         return { title: 'CREATE BILL', path: ['Bills', 'Create Bill'], icon: Receipt }
       case 'all-bills':

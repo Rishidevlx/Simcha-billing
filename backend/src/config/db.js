@@ -195,6 +195,7 @@ export async function initDatabase() {
             copy_type ENUM('ORIGINAL', 'DUPLICATE', 'TRIPLICATE') DEFAULT 'ORIGINAL',
             customer_name VARCHAR(200) NOT NULL,
             customer_phone VARCHAR(50),
+            customer_email VARCHAR(191),
             customer_address TEXT,
             customer_gstin VARCHAR(50),
             place_of_supply VARCHAR(100) DEFAULT '33-Tamil Nadu',
@@ -216,6 +217,13 @@ export async function initDatabase() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         `)
+
+        // Ensure customer_email column exists in existing databases
+        try {
+          await pool.query(`ALTER TABLE bills ADD COLUMN customer_email VARCHAR(191) NULL AFTER customer_phone;`)
+        } catch {
+          // Column already exists
+        }
         console.log('✅ "bills" table ready.')
 
         // Step 12: Create Bill Items table if not exists
@@ -239,6 +247,46 @@ export async function initDatabase() {
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         `)
         console.log('✅ "bill_items" table ready.')
+
+        // Step 12B: Create Inventory Serials table for serial number validation
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS inventory_serials (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            material_id INT NOT NULL,
+            serial_number VARCHAR(150) NOT NULL UNIQUE,
+            status ENUM('Available', 'Sold', 'Damaged') DEFAULT 'Available',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+        console.log('✅ "inventory_serials" table ready.')
+
+        // Seed sample serials for material 1 (Logitech) if table is empty
+        const [serialCount] = await pool.query('SELECT COUNT(*) as count FROM inventory_serials')
+        if (serialCount[0].count === 0) {
+          const sampleSerials = [
+            '2528ME12EZG9',
+            '2528ME12EZ10',
+            '2528ME12EZ11',
+            'LOG-H390-1001',
+            'LOG-H390-1002',
+            'LOG-H390-1003',
+            '8901234567890',
+            '8901234567891',
+            '8909876543210',
+            '8904567891234'
+          ]
+          for (const sn of sampleSerials) {
+            try {
+              await pool.query(
+                'INSERT IGNORE INTO inventory_serials (material_id, serial_number, status) VALUES (1, ?, "Available")',
+                [sn]
+              )
+            } catch (e) {}
+          }
+          console.log('✨ Seeded initial inventory serial numbers.')
+        }
 
         // Step 13: Seed sample initial bill if empty
         const [billCount] = await pool.query('SELECT COUNT(*) as count FROM bills')
@@ -279,12 +327,20 @@ export async function initDatabase() {
             sender_name VARCHAR(150) DEFAULT 'SIMCHA INFO SOLUTIONS',
             recipient_email VARCHAR(191) DEFAULT 'simchainfosolutions@gmail.com',
             auto_email_on_create BOOLEAN DEFAULT TRUE,
+            email_customer_copy BOOLEAN DEFAULT TRUE,
             email_subject VARCHAR(255) DEFAULT 'New Tax Invoice Generated - {invoice_number}',
             email_body TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         `)
+
+        // Ensure email_customer_copy column exists in existing databases
+        try {
+          await pool.query(`ALTER TABLE email_configs ADD COLUMN email_customer_copy BOOLEAN DEFAULT TRUE AFTER auto_email_on_create;`)
+        } catch {
+          // Column already exists
+        }
         console.log('✅ "email_configs" table ready.')
 
         // Seed initial email config if empty
@@ -293,16 +349,66 @@ export async function initDatabase() {
           await pool.query(`
             INSERT INTO email_configs (
               id, smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass,
-              sender_name, recipient_email, auto_email_on_create, email_subject, email_body
+              sender_name, recipient_email, auto_email_on_create, email_customer_copy, email_subject, email_body
             ) VALUES (
               1, 'smtp.gmail.com', 465, true, 'simchainfosolutions@gmail.com', '',
-              'SIMCHA INFO SOLUTIONS', 'simchainfosolutions@gmail.com', true,
+              'SIMCHA INFO SOLUTIONS', 'simchainfosolutions@gmail.com', true, true,
               'New Tax Invoice Generated - {invoice_number}',
               'Dear Customer / Team,\n\nPlease find attached the official Tax Invoice generated from Simcha Info Solutions Billing System.\n\nThank you for doing business with us!'
             )
           `)
           console.log('✨ Seeded default email configurations.')
         }
+
+        // Step 15: Create Inward Bills table if not exists
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS inward_bills (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            inward_number VARCHAR(100) NOT NULL UNIQUE,
+            inward_date DATE NOT NULL,
+            supplier_name VARCHAR(255) NOT NULL,
+            supplier_phone VARCHAR(50) NULL,
+            supplier_email VARCHAR(191) NULL,
+            supplier_location VARCHAR(100) DEFAULT '33 - Tamil Nadu',
+            supplier_gstin VARCHAR(50) NULL,
+            taxable_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            cgst_rate DECIMAL(5, 2) DEFAULT 9.00,
+            cgst_amount DECIMAL(12, 2) DEFAULT 0.00,
+            sgst_rate DECIMAL(5, 2) DEFAULT 9.00,
+            sgst_amount DECIMAL(12, 2) DEFAULT 0.00,
+            igst_rate DECIMAL(5, 2) DEFAULT 18.00,
+            igst_amount DECIMAL(12, 2) DEFAULT 0.00,
+            total_tax DECIMAL(12, 2) DEFAULT 0.00,
+            total_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            total_quantity DECIMAL(10, 2) DEFAULT 0.00,
+            total_items INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+        console.log('✅ "inward_bills" table ready.')
+
+        // Step 16: Create Inward Bill Items table if not exists
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS inward_bill_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            inward_id INT NOT NULL,
+            material_id INT NULL,
+            item_name VARCHAR(255) NOT NULL,
+            description TEXT NULL,
+            hsn_code VARCHAR(50) NULL,
+            quantity DECIMAL(10, 2) NOT NULL DEFAULT 1.00,
+            unit VARCHAR(50) DEFAULT 'NOS',
+            rate DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            has_serial BOOLEAN DEFAULT FALSE,
+            serial_numbers TEXT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (inward_id) REFERENCES inward_bills(id) ON DELETE CASCADE,
+            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+        console.log('✅ "inward_bill_items" table ready.')
 
         return pool
       } catch (error) {

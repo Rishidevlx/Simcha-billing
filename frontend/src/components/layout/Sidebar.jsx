@@ -34,7 +34,7 @@ export default function Sidebar({
       setOpenMenus(prev => ({ ...prev, settings: true }))
     } else if (activeRoute === 'add-material' || activeRoute === 'all-materials') {
       setOpenMenus(prev => ({ ...prev, materials: true }))
-    } else if (activeRoute === 'create-bill' || activeRoute === 'all-bills') {
+    } else if (activeRoute === 'inward' || activeRoute === 'inward-reports' || activeRoute === 'create-bill' || activeRoute === 'all-bills') {
       setOpenMenus(prev => ({ ...prev, bills: true }))
     }
   }, [activeRoute])
@@ -61,7 +61,9 @@ export default function Sidebar({
       title: 'Bills',
       icon: Receipt,
       subItems: [
-        { id: 'create-bill', title: 'Create Bill' },
+        { id: 'inward', title: 'Inward' },
+        { id: 'inward-reports', title: 'Inward Reports' },
+        { id: 'create-bill', title: 'Outward' },
         { id: 'all-bills', title: 'All Bills' }
       ]
     },
@@ -135,7 +137,7 @@ export default function Sidebar({
           </div>
 
           {/* Menu Section */}
-          <div className={`p-3 ${isCollapsed ? 'overflow-visible' : 'overflow-y-auto max-h-[calc(100vh-96px)]'}`}>
+          <div className={`p-3 sidebar-scrollbar ${isCollapsed ? 'overflow-visible' : 'overflow-y-auto max-h-[calc(100vh-96px)]'}`}>
             {!isCollapsed && (
               <div className="px-3 py-2 text-[11px] font-bold text-blue-200/70 dark:text-slate-400 uppercase tracking-widest">
                 Menu

@@ -57,6 +57,7 @@ export async function createBill(req, res) {
       copy_type = 'ORIGINAL',
       customer_name,
       customer_phone,
+      customer_email,
       customer_address,
       customer_gstin,
       place_of_supply = '33-Tamil Nadu',
@@ -113,12 +114,12 @@ export async function createBill(req, res) {
     const [billResult] = await pool.query(`
       INSERT INTO bills (
         invoice_number, invoice_date, invoice_type, copy_type,
-        customer_name, customer_phone, customer_address, customer_gstin,
+        customer_name, customer_phone, customer_email, customer_address, customer_gstin,
         place_of_supply, taxable_amount, cgst_rate, cgst_amount,
         sgst_rate, sgst_amount, igst_rate, igst_amount,
         total_tax, round_off, total_amount, amount_in_words,
         payment_mode, payment_status, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       invoice_number.trim(),
       invoice_date || new Date().toISOString().split('T')[0],
@@ -126,6 +127,7 @@ export async function createBill(req, res) {
       copy_type,
       customer_name.trim(),
       customer_phone ? customer_phone.trim() : null,
+      customer_email ? customer_email.trim() : null,
       customer_address ? customer_address.trim() : null,
       customer_gstin ? customer_gstin.trim() : null,
       place_of_supply || '33-Tamil Nadu',

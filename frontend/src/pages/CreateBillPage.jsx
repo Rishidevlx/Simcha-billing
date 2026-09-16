@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Receipt,
@@ -17,6 +17,7 @@ import {
   CreditCard,
   Building,
   CheckCircle2,
+  AlertCircle,
   Calendar
 } from 'lucide-react'
 import Swal from 'sweetalert2'
@@ -26,26 +27,42 @@ import { API_ENDPOINTS } from '../config/api'
 import { numberToIndianRupees } from '../utils/numberToWords'
 
 const INDIAN_STATES = [
-  '33-Tamil Nadu',
-  '32-Kerala',
-  '29-Karnataka',
-  '37-Andhra Pradesh',
-  '36-Telangana',
-  '27-Maharashtra',
-  '07-Delhi',
-  '24-Gujarat',
-  '09-Uttar Pradesh',
-  '19-West Bengal',
-  '08-Rajasthan',
-  '23-Madhya Pradesh',
-  '06-Haryana',
-  '03-Punjab',
-  '21-Odisha',
-  '10-Bihar',
-  '18-Assam',
-  '30-Goa',
-  '34-Puducherry',
-  '99-Other State'
+  '01 - Jammu & Kashmir',
+  '02 - Himachal Pradesh',
+  '03 - Punjab',
+  '04 - Chandigarh',
+  '05 - Uttarakhand',
+  '06 - Haryana',
+  '07 - Delhi',
+  '08 - Rajasthan',
+  '09 - Uttar Pradesh',
+  '10 - Bihar',
+  '11 - Sikkim',
+  '12 - Arunachal Pradesh',
+  '13 - Nagaland',
+  '14 - Manipur',
+  '15 - Mizoram',
+  '16 - Tripura',
+  '17 - Meghalaya',
+  '18 - Assam',
+  '19 - West Bengal',
+  '20 - Jharkhand',
+  '21 - Odisha',
+  '22 - Chhattisgarh',
+  '23 - Madhya Pradesh',
+  '24 - Gujarat',
+  '26 - Dadra and Nagar Haveli and Daman & Diu',
+  '27 - Maharashtra',
+  '29 - Karnataka',
+  '30 - Goa',
+  '31 - Lakshadweep',
+  '32 - Kerala',
+  '33 - Tamil Nadu',
+  '34 - Puducherry',
+  '35 - Andaman and Nicobar Islands',
+  '36 - Telangana',
+  '37 - Andhra Pradesh',
+  '38 - Ladakh'
 ]
 
 export default function CreateBillPage({ setActiveRoute }) {
@@ -56,8 +73,9 @@ export default function CreateBillPage({ setActiveRoute }) {
   const [previewBill, setPreviewBill] = useState(null)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
-  // Settings & Materials
+  // Settings, Categories & Materials
   const [settings, setSettings] = useState(null)
+  const [categories, setCategories] = useState([])
   const [materials, setMaterials] = useState([])
 
   // Bill Meta
@@ -65,11 +83,12 @@ export default function CreateBillPage({ setActiveRoute }) {
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
   const [invoiceType, setInvoiceType] = useState('GST')
   const [copyType, setCopyType] = useState('ORIGINAL')
-  const [placeOfSupply, setPlaceOfSupply] = useState('33-Tamil Nadu')
+  const [placeOfSupply, setPlaceOfSupply] = useState('33 - Tamil Nadu')
 
   // Customer Information
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
+  const [customerEmail, setCustomerEmail] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
   const [customerGstin, setCustomerGstin] = useState('')
 
@@ -78,13 +97,15 @@ export default function CreateBillPage({ setActiveRoute }) {
   const [paymentStatus, setPaymentStatus] = useState('Paid')
   const [notes, setNotes] = useState('')
 
-  // Items State (Array of line items)
+  // Items State (Array of line items with multi serial number support)
   const [items, setItems] = useState([
     {
       material_id: '',
       item_name: '',
       category_name: '',
+      category_id: '',
       serial_number: '',
+      serial_numbers: [''],
       hsn_code: '',
       quantity: 1,
       unit: 'NOS',
@@ -96,6 +117,54 @@ export default function CreateBillPage({ setActiveRoute }) {
       has_serial: false
     }
   ])
+
+  // Verified Serials Cache from DB: { [serial.toLowerCase()]: { found: true/false, status: 'Available'/'Sold', message: '...' } }
+  const [verifiedSerials, setVerifiedSerials] = useState({})
+
+  // Find Duplicate Serial Numbers across all invoice line items
+  const duplicateSerials = useMemo(() => {
+    const counts = {}
+    items.forEach(item => {
+      const serials = item.serial_numbers && item.serial_numbers.length > 0
+        ? item.serial_numbers
+        : (item.serial_number ? [item.serial_number] : [])
+      
+      serials.forEach(s => {
+        const trimmed = (s || '').trim().toLowerCase()
+        if (trimmed) {
+          counts[trimmed] = (counts[trimmed] || 0) + 1
+        }
+      })
+    })
+    const duplicates = new Set()
+    Object.entries(counts).forEach(([val, count]) => {
+      if (count > 1) {
+        duplicates.add(val)
+      }
+    })
+    return duplicates
+  }, [items])
+
+  // Verify serial number against Database
+  const verifySerialWithDb = async (serialVal) => {
+    const trimmed = (serialVal || '').trim()
+    if (!trimmed || verifiedSerials[trimmed.toLowerCase()] !== undefined) return
+
+    try {
+      const res = await fetch(API_ENDPOINTS.VERIFY_SERIAL(trimmed))
+      const data = await res.json()
+      setVerifiedSerials(prev => ({
+        ...prev,
+        [trimmed.toLowerCase()]: {
+          found: Boolean(data.found),
+          status: data.status,
+          message: data.message || (data.found ? 'Verified in stock' : 'Not found in DB')
+        }
+      }))
+    } catch (e) {
+      console.error('Error verifying serial number with DB:', e)
+    }
+  }
 
   // Fetch Next Number, Settings & Materials on load
   const loadInitialData = async () => {
@@ -109,14 +178,21 @@ export default function CreateBillPage({ setActiveRoute }) {
         setSettings(settingsData.settings)
       }
 
-      // 2. Fetch Materials
+      // 2. Fetch Categories
+      const catRes = await fetch(API_ENDPOINTS.CATEGORIES)
+      const catData = await catRes.json()
+      if (catData.success && catData.categories) {
+        setCategories(catData.categories.filter(c => c.status === 'Active'))
+      }
+
+      // 3. Fetch Materials
       const matRes = await fetch(API_ENDPOINTS.MATERIALS)
       const matData = await matRes.json()
       if (matData.success && matData.materials) {
         setMaterials(matData.materials.filter(m => m.status === 'Active'))
       }
 
-      // 3. Fetch Next Invoice Number
+      // 4. Fetch Next Invoice Number
       fetchNextInvoiceNumber()
 
     } catch (err) {
@@ -183,11 +259,11 @@ export default function CreateBillPage({ setActiveRoute }) {
     })
   }
 
-  // Handle Place of Supply Change
+  // Handle Place of Supply Change (Supports full clear)
   const handlePlaceOfSupplyChange = (newPlace) => {
-    const val = newPlace || '33-Tamil Nadu'
+    const val = newPlace || ''
     setPlaceOfSupply(val)
-    const newIsIntra = val.includes('33') || val.toLowerCase().includes('tamil nadu')
+    const newIsIntra = !val || val.includes('33') || val.toLowerCase().includes('tamil nadu')
     setItems(prevItems => {
       return prevItems.map(it => {
         const qty = parseFloat(it.quantity) || 0
@@ -246,6 +322,57 @@ export default function CreateBillPage({ setActiveRoute }) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [items, customerName, customerPhone, customerAddress, customerGstin, placeOfSupply, invoiceNumber, invoiceDate, invoiceType, copyType, paymentMode, paymentStatus, notes, settings])
 
+  // Handle Category Selection for an item row
+  const handleCategorySelect = (index, categoryId) => {
+    const selectedCat = categories.find(c => String(c.id) === String(categoryId))
+    setItems(prevItems => {
+      const updated = [...prevItems]
+      const currentItem = updated[index]
+      
+      let newMaterialId = currentItem.material_id
+      let newItemName = currentItem.item_name
+      let newHsn = currentItem.hsn_code
+      let newRate = currentItem.rate
+      let newUnit = currentItem.unit
+      let newTaxInclusive = currentItem.tax_inclusive
+      let newTaxRate = currentItem.tax_rate
+      let newTaxAmount = currentItem.tax_amount
+      let newAmount = currentItem.amount
+      let newHasSerial = currentItem.has_serial
+
+      // If category changes and selected material doesn't belong to it, reset product selection
+      if (categoryId && currentItem.material_id) {
+        const mat = materials.find(m => String(m.id) === String(currentItem.material_id))
+        if (mat && String(mat.category_id) !== String(categoryId)) {
+          newMaterialId = ''
+          newItemName = ''
+          newHsn = ''
+          newRate = 0
+          newTaxAmount = 0
+          newAmount = 0
+          newHasSerial = false
+        }
+      }
+
+      updated[index] = {
+        ...currentItem,
+        category_id: categoryId ? String(categoryId) : '',
+        category_name: selectedCat ? selectedCat.name : '',
+        material_id: newMaterialId,
+        item_name: newItemName,
+        hsn_code: newHsn,
+        rate: newRate,
+        unit: newUnit,
+        tax_inclusive: newTaxInclusive,
+        tax_rate: newTaxRate,
+        tax_amount: newTaxAmount,
+        amount: newAmount,
+        has_serial: newHasSerial
+      }
+      return updated
+    })
+  }
+
   // Handle Material Selection for an item row with duplicate detection
   const handleMaterialSelect = (index, materialId) => {
     const selectedMat = materials.find(m => String(m.id) === String(materialId))
@@ -270,19 +397,27 @@ export default function CreateBillPage({ setActiveRoute }) {
     setItems(prevItems => {
       const updated = [...prevItems]
       if (selectedMat) {
-        const qty = updated[index].quantity || 1
+        const qty = Math.min(25, Math.max(1, parseFloat(updated[index].quantity) || 1))
         const rate = parseFloat(selectedMat.selling_price) || 0
         const taxable = qty * rate
         const isTaxEligible = selectedMat.tax_inclusive !== false && selectedMat.tax_inclusive !== 0 && selectedMat.tax_inclusive !== '0'
         const effectiveTaxRate = calculateEffectiveTaxRate(isTaxEligible, invoiceType, isIntraState)
         const taxAmt = taxable * (effectiveTaxRate / 100)
         const totalAmt = taxable + taxAmt
+        const hasSerial = Boolean(selectedMat.serial_tracking || selectedMat.has_serial)
+        const qtyCount = Math.min(25, Math.max(1, Math.floor(qty)))
+
+        let currentSerials = updated[index].serial_numbers || []
+        if (hasSerial) {
+          currentSerials = Array.from({ length: qtyCount }, (_, i) => currentSerials[i] || '')
+        }
 
         updated[index] = {
           ...updated[index],
           material_id: selectedMat.id,
           item_name: selectedMat.name,
-          category_name: selectedMat.category_name || '',
+          category_id: selectedMat.category_id ? String(selectedMat.category_id) : updated[index].category_id,
+          category_name: selectedMat.category_name || updated[index].category_name || '',
           hsn_code: selectedMat.hsn_code || '',
           unit: selectedMat.unit || 'NOS',
           rate: rate,
@@ -290,15 +425,17 @@ export default function CreateBillPage({ setActiveRoute }) {
           tax_rate: effectiveTaxRate,
           tax_amount: parseFloat(taxAmt.toFixed(2)),
           amount: parseFloat(totalAmt.toFixed(2)),
-          has_serial: Boolean(selectedMat.serial_tracking)
+          has_serial: hasSerial,
+          serial_numbers: currentSerials,
+          serial_number: currentSerials.filter(Boolean).join(', ')
         }
       } else {
         updated[index] = {
           ...updated[index],
           material_id: '',
           item_name: '',
-          category_name: '',
           serial_number: '',
+          serial_numbers: [''],
           hsn_code: '',
           rate: 0,
           unit: 'NOS',
@@ -317,12 +454,25 @@ export default function CreateBillPage({ setActiveRoute }) {
   const handleItemChange = (index, field, value) => {
     setItems(prevItems => {
       const updated = [...prevItems]
-      updated[index] = { ...updated[index], [field]: value }
+      let finalVal = value
+
+      if (field === 'quantity') {
+        const num = parseFloat(value)
+        if (isNaN(num) || num < 1) {
+          finalVal = value === '' ? '' : 1
+        } else if (num > 25) {
+          finalVal = 25
+        } else {
+          finalVal = Math.floor(num)
+        }
+      }
+
+      updated[index] = { ...updated[index], [field]: finalVal }
 
       // Recalculate row amounts
-      const qty = parseFloat(field === 'quantity' ? value : updated[index].quantity) || 0
-      const rate = parseFloat(field === 'rate' ? value : updated[index].rate) || 0
-      const taxRate = parseFloat(field === 'tax_rate' ? value : updated[index].tax_rate) || 0
+      const qty = parseFloat(field === 'quantity' ? finalVal : updated[index].quantity) || 0
+      const rate = parseFloat(field === 'rate' ? finalVal : updated[index].rate) || 0
+      const taxRate = parseFloat(field === 'tax_rate' ? finalVal : updated[index].tax_rate) || 0
 
       const taxable = qty * rate
       const taxAmt = taxable * (taxRate / 100)
@@ -331,8 +481,31 @@ export default function CreateBillPage({ setActiveRoute }) {
       updated[index].tax_amount = parseFloat(taxAmt.toFixed(2))
       updated[index].amount = parseFloat(totalAmt.toFixed(2))
 
+      // Adjust serial numbers array length if quantity changes and has_serial is enabled
+      if (field === 'quantity' && updated[index].has_serial) {
+        const qtyCount = Math.min(25, Math.max(1, Math.floor(parseFloat(finalVal) || 1)))
+        const existingSerials = updated[index].serial_numbers || []
+        updated[index].serial_numbers = Array.from({ length: qtyCount }, (_, i) => existingSerials[i] || '')
+        updated[index].serial_number = updated[index].serial_numbers.filter(Boolean).join(', ')
+      }
+
       return updated
     })
+  }
+
+  // Handle individual serial number change
+  const handleSerialNumberChange = (itemIndex, serialIndex, val) => {
+    setItems(prev => {
+      const updated = [...prev]
+      const serials = [...(updated[itemIndex].serial_numbers || [])]
+      serials[serialIndex] = val
+      updated[itemIndex].serial_numbers = serials
+      updated[itemIndex].serial_number = serials.filter(Boolean).join(', ')
+      return updated
+    })
+    if (val.trim()) {
+      verifySerialWithDb(val.trim())
+    }
   }
 
   // Add Item Row
@@ -343,7 +516,9 @@ export default function CreateBillPage({ setActiveRoute }) {
         material_id: '',
         item_name: '',
         category_name: '',
+        category_id: '',
         serial_number: '',
+        serial_numbers: [''],
         hsn_code: '',
         quantity: 1,
         unit: 'NOS',
@@ -360,11 +535,26 @@ export default function CreateBillPage({ setActiveRoute }) {
   // Duplicate Item Row
   const handleDuplicateItem = (index) => {
     const itemToClone = items[index]
+    const qtyCount = Math.min(25, Math.max(1, Math.floor(itemToClone.quantity || 1)))
     setItems(prev => [
       ...prev.slice(0, index + 1),
-      { ...itemToClone, serial_number: '' },
+      {
+        ...itemToClone,
+        serial_number: '',
+        serial_numbers: itemToClone.has_serial ? Array.from({ length: qtyCount }, () => '') : ['']
+      },
       ...prev.slice(index + 1)
     ])
+    Swal.mixin({
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: 2000,
+      timerProgressBar: true
+    }).fire({
+      icon: 'success',
+      title: 'Line item duplicated'
+    })
   }
 
   // Remove Item Row
@@ -378,7 +568,19 @@ export default function CreateBillPage({ setActiveRoute }) {
       })
       return
     }
+    const itemToRemove = items[index]
+    const itemName = itemToRemove.item_name ? `"${itemToRemove.item_name}"` : `Item #${index + 1}`
     setItems(prev => prev.filter((_, i) => i !== index))
+    Swal.mixin({
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: 2000,
+      timerProgressBar: true
+    }).fire({
+      icon: 'info',
+      title: `${itemName} deleted`
+    })
   }
 
   // Aggregate Bill Calculations
@@ -398,8 +600,10 @@ export default function CreateBillPage({ setActiveRoute }) {
   const handleReset = () => {
     setCustomerName('')
     setCustomerPhone('')
+    setCustomerEmail('')
     setCustomerAddress('')
     setCustomerGstin('')
+    setPlaceOfSupply('33 - Tamil Nadu')
     setNotes('')
     setPaymentMode('Cash')
     setPaymentStatus('Paid')
@@ -408,7 +612,9 @@ export default function CreateBillPage({ setActiveRoute }) {
         material_id: '',
         item_name: '',
         category_name: '',
+        category_id: '',
         serial_number: '',
+        serial_numbers: [''],
         hsn_code: '',
         quantity: 1,
         unit: 'NOS',
@@ -459,6 +665,51 @@ export default function CreateBillPage({ setActiveRoute }) {
       return
     }
 
+    // 1. Check Duplicate Serial Numbers
+    if (duplicateSerials.size > 0) {
+      const duplicateList = Array.from(duplicateSerials).join(', ')
+      Swal.fire({
+        icon: 'error',
+        title: 'Duplicate Serial Numbers',
+        text: `Each serial number in the invoice must be unique. Duplicate found: "${duplicateList}"`,
+        confirmButtonColor: '#043486'
+      })
+      return
+    }
+
+    // 2. Validate Serial Numbers for tracked items
+    for (let i = 0; i < validItems.length; i++) {
+      const it = validItems[i]
+      if (it.has_serial) {
+        const count = Math.min(25, Math.max(1, Math.floor(parseFloat(it.quantity) || 1)))
+        const serials = it.serial_numbers || []
+        for (let s = 0; s < count; s++) {
+          const sVal = (serials[s] || '').trim()
+          if (!sVal) {
+            Swal.fire({
+              icon: 'warning',
+              title: 'Missing Serial Number',
+              text: `Please enter Serial #${s + 1} for item "${it.item_name}" (Row ${i + 1}).`,
+              confirmButtonColor: '#043486'
+            })
+            return
+          }
+
+          // Check if verified in DB as not found
+          const dbCheck = verifiedSerials[sVal.toLowerCase()]
+          if (dbCheck && dbCheck.found === false) {
+            Swal.fire({
+              icon: 'error',
+              title: 'Serial Number Not Found',
+              text: `Serial number "${sVal}" for "${it.item_name}" was not found in the registered stock. Please verify.`,
+              confirmButtonColor: '#043486'
+            })
+            return
+          }
+        }
+      }
+    }
+
     setIsSaving(true)
 
     try {
@@ -469,6 +720,7 @@ export default function CreateBillPage({ setActiveRoute }) {
         copy_type: copyType,
         customer_name: customerName.trim(),
         customer_phone: customerPhone.trim(),
+        customer_email: customerEmail.trim(),
         customer_address: customerAddress.trim(),
         customer_gstin: customerGstin.trim(),
         place_of_supply: placeOfSupply,
@@ -557,11 +809,26 @@ export default function CreateBillPage({ setActiveRoute }) {
     )
   }
 
-  const materialOptions = materials.map(m => ({
-    value: m.id,
-    label: `${m.name} ${m.code ? `(${m.code})` : ''}`,
-    subLabel: `${m.category_name ? `[${m.category_name}] • ` : ''}₹${m.selling_price} / ${m.unit || 'NOS'}`
+  const categoryOptions = categories.map(c => ({
+    value: String(c.id),
+    label: c.name
   }))
+
+  const getMaterialOptionsForRow = (categoryId, hsnCode) => {
+    let filtered = materials
+    if (categoryId) {
+      filtered = filtered.filter(m => String(m.category_id) === String(categoryId))
+    }
+    if (hsnCode && hsnCode.trim()) {
+      const query = hsnCode.trim().toLowerCase()
+      filtered = filtered.filter(m => m.hsn_code && m.hsn_code.toLowerCase().includes(query))
+    }
+    return filtered.map(m => ({
+      value: m.id,
+      label: m.name,
+      subLabel: `${m.category_name ? `[${m.category_name}] • ` : ''}₹${m.selling_price} / ${m.unit || 'NOS'}${m.hsn_code ? ` • HSN: ${m.hsn_code}` : ''}`
+    }))
+  }
 
   const stateOptions = INDIAN_STATES.map(st => ({
     value: st,
@@ -569,7 +836,7 @@ export default function CreateBillPage({ setActiveRoute }) {
   }))
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16 font-['Poppins',sans-serif]">
+    <div className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 space-y-6 pb-16 font-['Poppins',sans-serif]">
       
       {/* 1. Page Header & Quick Shortcuts Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-none border border-gray-200 dark:border-slate-800 shadow-sm transition-colors">
@@ -665,46 +932,66 @@ export default function CreateBillPage({ setActiveRoute }) {
               </div>
 
               <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Customer / Client Name *</label>
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    required
-                    placeholder="Enter customer / client name"
-                    className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-semibold placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                  />
+                {/* Row 1: Customer Name & Mobile */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Customer / Client Name *</label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      required
+                      placeholder="Enter customer / client name"
+                      className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-semibold placeholder:text-gray-400 dark:placeholder:text-slate-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
+                      Mobile / Phone Number <span className="text-gray-400 text-[11px] font-normal">(10 Digits)</span>
+                    </label>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      value={customerPhone}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 10)
+                        setCustomerPhone(val)
+                      }}
+                      placeholder="Enter 10-digit mobile number"
+                      className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-mono font-medium placeholder:text-gray-400 dark:placeholder:text-slate-500"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
-                    Mobile / Phone Number <span className="text-gray-400 text-[11px] font-normal">(10 Digits)</span>
-                  </label>
-                  <input
-                    type="tel"
-                    maxLength={10}
-                    value={customerPhone}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '').slice(0, 10)
-                      setCustomerPhone(val)
-                    }}
-                    placeholder="Enter 10-digit mobile number"
-                    className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-mono font-medium placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                  />
+                {/* Row 2: Customer Email & GSTIN */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
+                      Customer Email ID <span className="text-gray-400 text-[11px] font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      placeholder="Enter customer email address (e.g. client@gmail.com)"
+                      className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-medium placeholder:text-gray-400 dark:placeholder:text-slate-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Customer GSTIN <span className="text-gray-400 text-[11px] font-normal">(Optional)</span></label>
+                    <input
+                      type="text"
+                      value={customerGstin}
+                      onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
+                      placeholder="ENTER GSTIN (OPTIONAL)"
+                      className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white uppercase bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-mono font-medium placeholder:text-gray-400 dark:placeholder:text-slate-500"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Customer GSTIN (Optional)</label>
-                  <input
-                    type="text"
-                    value={customerGstin}
-                    onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
-                    placeholder="Enter GSTIN (optional)"
-                    className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white uppercase bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-mono font-medium placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                  />
-                </div>
-
+                {/* Row 3: Billing Address */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Billing Address</label>
                   <textarea
@@ -712,236 +999,9 @@ export default function CreateBillPage({ setActiveRoute }) {
                     value={customerAddress}
                     onChange={(e) => setCustomerAddress(e.target.value)}
                     placeholder="Enter billing address"
-                    className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-medium placeholder:text-gray-400 dark:placeholder:text-slate-500"
+                    className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500 font-medium resize-none"
                   />
                 </div>
-              </div>
-            </div>
-
-            {/* C. Line Items Grid */}
-            <div className="bg-white dark:bg-slate-900 rounded-none border border-gray-200 dark:border-slate-800 p-6 shadow-sm space-y-4 transition-colors">
-              <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-800">
-                <div className="flex items-center gap-2">
-                  <Boxes size={16} className="text-[#043486] dark:text-blue-400" />
-                  <h2 className="text-sm font-bold text-[#043486] dark:text-blue-400 tracking-wide uppercase">
-                    Invoice Line Items ({items.length})
-                  </h2>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleAddItem}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900 text-[#043486] dark:text-blue-300 font-semibold text-xs rounded-none border border-blue-200 dark:border-blue-900 transition-colors cursor-pointer"
-                >
-                  <Plus size={14} />
-                  <span>Add Line Item (Alt+A)</span>
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {items.map((item, index) => (
-                  <div
-                    key={index}
-                    className="p-4 rounded-none border border-gray-300 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-950/60 hover:border-blue-300 dark:hover:border-blue-800 transition-all space-y-3"
-                  >
-                    {/* Row Top: Material Selection + Custom Description + Category + Actions */}
-                    <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
-                      <span className="w-7 h-7 rounded-none bg-[#043486] text-white text-xs font-bold flex items-center justify-center shrink-0">
-                        {index + 1}
-                      </span>
-
-                      {/* Material Dropdown */}
-                      <div className="w-full md:w-72">
-                        <SearchableSelect
-                          options={materialOptions}
-                          value={item.material_id}
-                          onChange={(val) => handleMaterialSelect(index, val)}
-                          placeholder="Select or search material..."
-                        />
-                      </div>
-
-                      {/* Category Tag/Field */}
-                      <div className="w-full md:w-44 shrink-0">
-                        <input
-                          type="text"
-                          value={item.category_name || ''}
-                          onChange={(e) => handleItemChange(index, 'category_name', e.target.value)}
-                          placeholder="Category"
-                          className="w-full px-3 py-2.5 text-xs text-[#043486] dark:text-blue-300 bg-blue-50/50 dark:bg-slate-900 border border-blue-200 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-semibold placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                          title="Product Category"
-                        />
-                      </div>
-
-                      {/* Material Name Custom Input */}
-                      <div className="flex-1 w-full">
-                        <input
-                          type="text"
-                          value={item.item_name}
-                          onChange={(e) => handleItemChange(index, 'item_name', e.target.value)}
-                          placeholder="Enter item description / name"
-                          required
-                          className="w-full px-4 py-2.5 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                        />
-                      </div>
-
-                      {/* Row Actions */}
-                      <div className="flex items-center gap-1 shrink-0 self-end md:self-center">
-                        <button
-                          type="button"
-                          onClick={() => handleDuplicateItem(index)}
-                          title="Duplicate row"
-                          className="p-2 text-gray-400 hover:text-[#043486] dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 rounded-none transition-colors cursor-pointer"
-                        >
-                          <Copy size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveItem(index)}
-                          title="Delete row"
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-none transition-colors cursor-pointer"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Row Bottom: Serial No, HSN, Qty, Unit, Rate, Tax, Line Total */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 pt-2 border-t border-gray-200 dark:border-slate-800">
-                      
-                      {/* Serial Number */}
-                      <div className="col-span-2 sm:col-span-1">
-                        <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">
-                          Serial Number {item.has_serial && <span className="text-blue-500">*</span>}
-                        </label>
-                        <input
-                          type="text"
-                          value={item.serial_number}
-                          onChange={(e) => handleItemChange(index, 'serial_number', e.target.value)}
-                          placeholder="Enter serial number"
-                          className="w-full px-3 py-2 text-xs font-mono text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                        />
-                      </div>
-
-                      {/* HSN / SAC */}
-                      <div>
-                        <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">HSN / SAC</label>
-                        <input
-                          type="text"
-                          value={item.hsn_code}
-                          onChange={(e) => handleItemChange(index, 'hsn_code', e.target.value)}
-                          placeholder="Enter HSN / SAC"
-                          className="w-full px-3 py-2 text-xs font-mono text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                        />
-                      </div>
-
-                      {/* Quantity & Unit */}
-                      <div>
-                        <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">Qty & Unit</label>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            min="0.01"
-                            step="any"
-                            value={item.quantity}
-                            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                            className="w-16 px-2 py-2 text-xs text-center font-bold text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500"
-                          />
-                          <input
-                            type="text"
-                            value={item.unit}
-                            onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
-                            className="w-14 px-1.5 py-2 text-xs text-center uppercase text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-medium"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Rate (Base Price) */}
-                      <div>
-                        <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">Rate (₹)</label>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={item.rate}
-                          onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
-                          className="w-full px-3 py-2 text-xs font-semibold text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500"
-                        />
-                      </div>
-
-                      {/* Tax % */}
-                      <div>
-                        <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">Tax ({item.tax_rate}%)</label>
-                        <div className="px-3 py-2 text-xs bg-gray-100 dark:bg-slate-800 rounded-none border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 font-medium">
-                          ₹ {item.tax_amount.toFixed(2)}
-                        </div>
-                      </div>
-
-                      {/* Total Line Amount */}
-                      <div>
-                        <label className="block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 mb-1">Amount (₹)</label>
-                        <div className="px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 rounded-none">
-                          ₹ {item.amount.toFixed(2)}
-                        </div>
-                      </div>
-
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* D. Payment Mode & Remarks */}
-            <div className="bg-white dark:bg-slate-900 rounded-none border border-gray-200 dark:border-slate-800 p-6 shadow-sm space-y-4 transition-colors">
-              <h2 className="text-sm font-bold text-[#043486] dark:text-blue-400 tracking-wide uppercase flex items-center gap-2 pb-3 border-b border-gray-200 dark:border-slate-800">
-                <CreditCard size={16} />
-                <span>Payment & Remarks</span>
-              </h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Payment Method</label>
-                  <select
-                    value={paymentMode}
-                    onChange={(e) => setPaymentMode(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-medium"
-                  >
-                    <option value="Cash">Cash</option>
-                    <option value="UPI">UPI / GPay</option>
-                    <option value="Bank Transfer">Bank Transfer / NEFT</option>
-                    <option value="Card">Credit / Debit Card</option>
-                    <option value="Credit">Credit (Unpaid)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Payment Status</label>
-                  <select
-                    value={paymentStatus}
-                    onChange={(e) => setPaymentStatus(e.target.value)}
-                    className={`w-full px-3.5 py-2.5 text-sm border rounded-none focus:outline-none font-bold ${
-                      paymentStatus === 'Paid'
-                        ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
-                        : paymentStatus === 'Partial'
-                        ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800'
-                        : 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400 border-red-300 dark:border-red-800'
-                    }`}
-                  >
-                    <option value="Paid">Paid</option>
-                    <option value="Partial">Partial</option>
-                    <option value="Pending">Pending</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Notes / Custom Remarks</label>
-                <textarea
-                  rows={2}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Enter notes or remarks (optional)..."
-                  className="w-full px-4 py-2.5 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                />
               </div>
             </div>
 
@@ -1052,6 +1112,312 @@ export default function CreateBillPage({ setActiveRoute }) {
 
           </div>
 
+        </div>
+
+        {/* ================= MIDDLE SECTION: 100% FULL WIDTH INVOICE LINE ITEMS ================= */}
+        <div className="bg-white dark:bg-slate-900 rounded-none border border-gray-200 dark:border-slate-800 p-6 shadow-sm space-y-4 transition-colors w-full">
+          <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <Boxes size={18} className="text-[#043486] dark:text-blue-400" />
+              <h2 className="text-base font-bold text-[#043486] dark:text-blue-400 tracking-wide uppercase">
+                Invoice Line Items ({items.length})
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleAddItem}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-[#043486] hover:bg-[#0248BC] text-white font-semibold text-xs rounded-none shadow-sm hover:shadow transition-all cursor-pointer"
+            >
+              <Plus size={15} />
+              <span>Add Line Item (Alt+A)</span>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {items.map((item, index) => (
+              <div
+                key={index}
+                className="p-4 rounded-none border border-gray-300 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-950/60 hover:border-blue-300 dark:hover:border-blue-800 transition-all space-y-3"
+              >
+                {/* Row 1: Index + Category + Product Select + HSN/SAC + Qty & Unit + Row Actions */}
+                <div className="flex flex-col md:flex-row items-stretch md:items-end gap-3">
+                  {/* S.No */}
+                  <div className="shrink-0">
+                  
+                    <span className="w-9 h-[41px] rounded-none bg-[#043486] text-white text-xs font-bold flex items-center justify-center shrink-0">
+                      {index + 1}
+                    </span>
+                  </div>
+
+                  {/* 1. Category Search & Select Dropdown */}
+                  <div className="w-full md:w-60 shrink-0">
+                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">
+                      Material Category
+                    </label>
+                    <SearchableSelect
+                      options={categoryOptions}
+                      value={item.category_id || ''}
+                      onChange={(val) => handleCategorySelect(index, val)}
+                      placeholder="Select Category..."
+                    />
+                  </div>
+
+                  {/* 2. Product / Material Search & Select Dropdown (Massive Expanded Width) */}
+                  <div className="flex-1 min-w-[260px]">
+                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">
+                      Item Name <span className="text-blue-500">*</span>
+                    </label>
+                    <SearchableSelect
+                      options={getMaterialOptionsForRow(item.category_id, item.hsn_code)}
+                      value={item.material_id || ''}
+                      onChange={(val) => handleMaterialSelect(index, val)}
+                      placeholder={
+                        item.category_name
+                          ? `Select product in "${item.category_name}"...`
+                          : (item.hsn_code ? `Select product for HSN "${item.hsn_code}"...` : 'Search & select product / item...')
+                      }
+                    />
+                  </div>
+
+                  {/* 3. HSN / SAC */}
+                  <div className="w-full sm:w-36 shrink-0">
+                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">
+                      HSN / SAC Code
+                    </label>
+                    <input
+                      type="text"
+                      value={item.hsn_code}
+                      onChange={(e) => handleItemChange(index, 'hsn_code', e.target.value)}
+                      placeholder="HSN / SAC"
+                      title="HSN / SAC Code"
+                      className="w-full px-3 py-2.5 text-xs font-mono text-center text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500 font-medium h-[41px]"
+                    />
+                  </div>
+
+                  {/* 4. Quantity & Unit */}
+                  <div className="shrink-0">
+                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">
+                      Qty & Unit
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        value={item.quantity}
+                        onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                        title="Quantity"
+                        placeholder="Qty"
+                        className="w-20 px-2 py-2.5 text-xs text-center font-bold text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 h-[41px]"
+                      />
+                      <input
+                        type="text"
+                        value={item.unit || 'NOS'}
+                        readOnly
+                        title="Unit (From material)"
+                        className="w-18 px-2 py-2.5 text-xs text-center uppercase text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-none cursor-not-allowed select-none focus:outline-none font-semibold h-[41px]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row Actions */}
+                  <div className="shrink-0 self-end md:self-end">
+                    <label className="hidden md:block text-[11px] font-semibold text-transparent select-none mb-1">
+                      Action
+                    </label>
+                    <div className="flex items-center gap-1 h-[41px]">
+                      <button
+                        type="button"
+                        onClick={() => handleDuplicateItem(index)}
+                        title="Duplicate row"
+                        className="p-2.5 text-gray-400 hover:text-[#043486] dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 rounded-none transition-colors cursor-pointer"
+                      >
+                        <Copy size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(index)}
+                        title="Delete row"
+                        className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-none transition-colors cursor-pointer"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 2: Dynamic Serial Number Inputs (If item has serial tracking or serial number entered) */}
+                {(item.has_serial || (item.serial_numbers && item.serial_numbers.some(Boolean)) || item.serial_number) && (
+                  <div className="p-4 bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 rounded-none space-y-3 pt-3">
+                    <div className="flex items-center justify-between text-xs font-bold text-[#043486] dark:text-blue-300">
+                      <span className="flex items-center gap-1.5">
+                        <Hash size={14} />
+                        <span>Enter Serial Numbers for stock verification ({Math.min(25, Math.max(1, Math.floor(parseFloat(item.quantity) || 1)))} total)</span>
+                      </span>
+                      <span className="text-[11px] text-gray-500 dark:text-slate-400 font-normal">
+                        Checked against registered inventory in DB
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {Array.from({ length: Math.min(25, Math.max(1, Math.floor(parseFloat(item.quantity) || 1))) }).map((_, sIdx) => {
+                        const serialVal = item.serial_numbers?.[sIdx] || (sIdx === 0 ? item.serial_number : '') || ''
+                        const trimmed = serialVal.trim().toLowerCase()
+                        const isDuplicate = trimmed !== '' && duplicateSerials.has(trimmed)
+                        const dbStatus = trimmed ? verifiedSerials[trimmed] : null
+                        const isNotFound = dbStatus && dbStatus.found === false
+                        const isVerified = dbStatus && dbStatus.found === true
+
+                        return (
+                          <div key={sIdx} className="space-y-1">
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 text-xs font-mono font-bold">
+                                #{sIdx + 1}
+                              </div>
+                              <input
+                                type="text"
+                                value={serialVal}
+                                onChange={(e) => handleSerialNumberChange(index, sIdx, e.target.value)}
+                                onBlur={(e) => {
+                                  if (e.target.value.trim()) {
+                                    verifySerialWithDb(e.target.value.trim())
+                                  }
+                                }}
+                                placeholder={`Serial #${sIdx + 1}`}
+                                className={`w-full pl-9 pr-8 py-2.5 text-xs sm:text-sm font-mono text-[#292424] dark:text-white rounded-none focus:outline-none transition-colors ${
+                                  isDuplicate || isNotFound
+                                    ? 'bg-red-50 dark:bg-red-950/40 border-2 border-red-500 text-red-700 dark:text-red-300 focus:border-red-600'
+                                    : isVerified
+                                    ? 'bg-emerald-50/60 dark:bg-emerald-950/40 border-2 border-emerald-500 text-emerald-800 dark:text-emerald-300'
+                                    : 'bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 focus:border-[#043486] dark:focus:border-blue-500'
+                                } placeholder:text-gray-400 dark:placeholder:text-slate-500`}
+                              />
+                              <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
+                                {isDuplicate ? (
+                                  <AlertCircle size={15} className="text-red-500" title="Duplicate serial in bill" />
+                                ) : isNotFound ? (
+                                  <AlertCircle size={15} className="text-red-500" title="Not found in DB" />
+                                ) : isVerified ? (
+                                  <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" title="Verified in stock" />
+                                ) : null}
+                              </div>
+                            </div>
+
+                            {/* Status label under input */}
+                            {trimmed && (
+                              <div className="text-[10px] font-medium px-1 flex items-center gap-1">
+                                {isDuplicate ? (
+                                  <span className="text-red-600 dark:text-red-400 font-bold">⚠️ Duplicate in bill</span>
+                                ) : isNotFound ? (
+                                  <span className="text-red-600 dark:text-red-400 font-bold">❌ Not found in DB</span>
+                                ) : isVerified ? (
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">✅ Verified in DB ({dbStatus.status})</span>
+                                ) : (
+                                  <span className="text-gray-400">Verifying...</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Row 3 (Last Row): Rate, Tax, Amount */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-gray-200 dark:border-slate-800 items-end">
+                  {/* Rate (Base Price - Non-editable from material) */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">Rate (₹)</label>
+                    <input
+                      type="text"
+                      value={Number(item.rate || 0).toFixed(2)}
+                      readOnly
+                      className="w-full px-3 py-2.5 text-xs font-semibold text-right font-mono text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-none cursor-not-allowed select-none focus:outline-none h-[41px]"
+                    />
+                  </div>
+
+                  {/* Tax % */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">Tax ({item.tax_rate}%)</label>
+                    <div className="px-3 py-2.5 text-xs bg-gray-100 dark:bg-slate-800 rounded-none border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 font-mono font-medium flex items-center justify-end h-[41px]">
+                      ₹ {Number(item.tax_amount || 0).toFixed(2)}
+                    </div>
+                  </div>
+
+                  {/* Total Line Amount */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 mb-1">Amount (₹)</label>
+                    <div className="px-3 py-2.5 text-xs font-bold font-mono text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 rounded-none flex items-center justify-end h-[41px]">
+                      ₹ {Number(item.amount || 0).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ================= BOTTOM SECTION: PAYMENT & REMARKS ================= */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-8 space-y-6">
+            {/* D. Payment & Remarks */}
+            <div className="bg-white dark:bg-slate-900 rounded-none border border-gray-200 dark:border-slate-800 p-6 shadow-sm space-y-5 transition-colors">
+              <div className="flex items-center gap-2 pb-3 border-b border-gray-200 dark:border-slate-800">
+                <CreditCard size={16} className="text-[#043486] dark:text-blue-400" />
+                <h2 className="text-sm font-bold text-[#043486] dark:text-blue-400 tracking-wide uppercase">
+                  Payment & Remarks
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Payment Method</label>
+                  <select
+                    value={paymentMode}
+                    onChange={(e) => setPaymentMode(e.target.value)}
+                    className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-medium"
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Online / Net Banking">Online / Net Banking</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="UPI">UPI</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Payment Status</label>
+                  <select
+                    value={paymentStatus}
+                    onChange={(e) => setPaymentStatus(e.target.value)}
+                    className={`w-full px-4 py-3 text-sm font-bold border rounded-none focus:outline-none ${
+                      paymentStatus === 'Paid'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
+                        : paymentStatus === 'Partial'
+                        ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800'
+                        : 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400 border-red-300 dark:border-red-800'
+                    }`}
+                  >
+                    <option value="Paid">Paid</option>
+                    <option value="Partial">Partial</option>
+                    <option value="Pending">Pending</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Notes / Custom Remarks</label>
+                <textarea
+                  rows={2}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Enter notes or remarks (optional)..."
+                  className="w-full px-4 py-2.5 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
       </form>

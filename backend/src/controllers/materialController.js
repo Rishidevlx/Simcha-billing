@@ -295,4 +295,90 @@ export const bulkDeleteMaterials = async (req, res) => {
   }
 }
 
+// Verify Serial Number against Database
+export const verifySerialNumber = async (req, res) => {
+  try {
+    const { serialNumber } = req.params
+    const { materialId } = req.query
+
+    if (!serialNumber || !serialNumber.trim()) {
+      return res.status(400).json({
+        success: false,
+        found: false,
+        message: 'Serial number is required.'
+      })
+    }
+
+    const pool = getPool()
+    const cleanSerial = serialNumber.trim()
+
+    // 1. Check inventory_serials
+    const [invRows] = await pool.query(
+      'SELECT s.*, m.name as material_name FROM inventory_serials s LEFT JOIN materials m ON s.material_id = m.id WHERE LOWER(s.serial_number) = LOWER(?)',
+      [cleanSerial]
+    )
+
+    if (invRows.length > 0) {
+      const match = invRows[0]
+      return res.status(200).json({
+        success: true,
+        found: true,
+        status: match.status,
+        material_id: match.material_id,
+        material_name: match.material_name,
+        message: match.status === 'Available' ? 'Verified in stock' : `Serial is ${match.status}`
+      })
+    }
+
+    // 2. Check materials barcode or code
+    const [matRows] = await pool.query(
+      'SELECT id, name, barcode, code FROM materials WHERE LOWER(barcode) = LOWER(?) OR LOWER(code) = LOWER(?)',
+      [cleanSerial, cleanSerial]
+    )
+
+    if (matRows.length > 0) {
+      const mat = matRows[0]
+      return res.status(200).json({
+        success: true,
+        found: true,
+        status: 'Available',
+        material_id: mat.id,
+        material_name: mat.name,
+        message: 'Verified with product code/barcode'
+      })
+    }
+
+    // 3. Check bill_items historical serials
+    const [billItemRows] = await pool.query(
+      'SELECT bi.*, m.name as material_name FROM bill_items bi LEFT JOIN materials m ON bi.material_id = m.id WHERE LOWER(bi.serial_number) = LOWER(?) LIMIT 1',
+      [cleanSerial]
+    )
+
+    if (billItemRows.length > 0) {
+      return res.status(200).json({
+        success: true,
+        found: true,
+        status: 'Sold',
+        material_id: billItemRows[0].material_id,
+        material_name: billItemRows[0].material_name,
+        message: 'Serial previously billed/sold'
+      })
+    }
+
+    // Not found
+    return res.status(200).json({
+      success: true,
+      found: false,
+      message: 'Serial number not found in database'
+    })
+  } catch (error) {
+    console.error('Error verifying serial number:', error)
+    res.status(500).json({
+      success: false,
+      found: false,
+      message: 'Failed to verify serial number.'
+    })
+  }
+}
+
 

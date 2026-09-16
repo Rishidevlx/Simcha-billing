@@ -52,9 +52,12 @@ export default function SearchableSelect({
     const handleClickOutside = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
         setIsOpen(false)
-        // If input does not match selected value, revert or clear
-        const selected = normalizedOptions.find(opt => String(opt.value) === String(value))
-        setInputText(selected ? selected.label : '')
+        if (!value) {
+          setInputText('')
+        } else {
+          const selected = normalizedOptions.find(opt => String(opt.value) === String(value))
+          setInputText(selected ? selected.label : (String(value) || ''))
+        }
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -200,7 +203,7 @@ export default function SearchableSelect({
         >
           {filteredOptions.length === 0 ? (
             <div className="px-3 py-3 text-center text-xs text-gray-400 dark:text-slate-500">
-              No matching categories found
+              No matching options found
             </div>
           ) : (
             filteredOptions.map((opt, idx) => {

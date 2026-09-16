@@ -8,6 +8,7 @@ import materialRoutes from './routes/materialRoutes.js'
 import settingsRoutes from './routes/settingsRoutes.js'
 import billRoutes from './routes/billRoutes.js'
 import emailRoutes from './routes/emailRoutes.js'
+import inwardRoutes from './routes/inwardRoutes.js'
 
 dotenv.config()
 
@@ -45,6 +46,7 @@ app.use('/api/categories', categoryRoutes)
 app.use('/api/materials', materialRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/bills', billRoutes)
+app.use('/api/inwards', inwardRoutes)
 app.use('/api/email-config', emailRoutes)
 
 

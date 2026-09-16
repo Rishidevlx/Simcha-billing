@@ -19,6 +19,10 @@ export const API_ENDPOINTS = {
   BILLS: `${API_BASE_URL}/api/bills`,
   BILL_BY_ID: (id) => `${API_BASE_URL}/api/bills/${id}`,
   NEXT_INVOICE_NUMBER: `${API_BASE_URL}/api/bills/meta/next-number`,
+  INWARDS: `${API_BASE_URL}/api/inwards`,
+  INWARD_BY_ID: (id) => `${API_BASE_URL}/api/inwards/${id}`,
+  NEXT_INWARD_NUMBER: `${API_BASE_URL}/api/inwards/meta/next-number`,
+  VERIFY_SERIAL: (serial) => `${API_BASE_URL}/api/materials/verify-serial/${encodeURIComponent(serial)}`,
   HEALTH: `${API_BASE_URL}/api/health`
 }
 

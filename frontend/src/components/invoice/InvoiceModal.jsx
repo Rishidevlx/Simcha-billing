@@ -33,24 +33,47 @@ export default function InvoiceModal({ isOpen, onClose, bill, settings }) {
     const fileName = `${bill.invoice_number || 'Invoice'}_${(bill.customer_name || 'Customer').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
 
     try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      })
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.98)
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4'
       })
 
-      const pdfWidth = pdf.internal.pageSize.getWidth()
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width
+      const pageElements = element.querySelectorAll('.invoice-page')
+      if (pageElements && pageElements.length > 0) {
+        for (let i = 0; i < pageElements.length; i++) {
+          const pageEl = pageElements[i]
+          const canvas = await html2canvas(pageEl, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff'
+          })
 
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, Math.min(pdfHeight, 297))
+          const imgData = canvas.toDataURL('image/jpeg', 0.98)
+          const pdfWidth = pdf.internal.pageSize.getWidth()
+          const pdfHeight = (canvas.height * pdfWidth) / canvas.width
+
+          if (i > 0) {
+            pdf.addPage('a4', 'portrait')
+          }
+          pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, Math.min(pdfHeight, 297))
+        }
+      } else {
+        const canvas = await html2canvas(element, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        })
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.98)
+        const pdfWidth = pdf.internal.pageSize.getWidth()
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width
+
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, Math.min(pdfHeight, 297))
+      }
+
       pdf.save(fileName)
 
       Swal.mixin({

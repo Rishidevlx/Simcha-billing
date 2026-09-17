@@ -410,6 +410,41 @@ export async function initDatabase() {
         `)
         console.log('✅ "inward_bill_items" table ready.')
 
+        // Ensure hardcopy_url column exists in inward_bills
+        try {
+          await pool.query(`ALTER TABLE inward_bills ADD COLUMN hardcopy_url TEXT NULL AFTER total_items;`)
+        } catch {}
+
+        // Ensure bank_image_url column exists in settings
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN bank_image_url TEXT NULL AFTER branch;`)
+        } catch {}
+
+        // Step 17: Create Cloudinary Configs table if not exists
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cloudinary_configs (
+            id INT PRIMARY KEY DEFAULT 1,
+            cloud_name VARCHAR(150) DEFAULT '',
+            api_key VARCHAR(150) DEFAULT '',
+            api_secret VARCHAR(255) DEFAULT '',
+            folder_name VARCHAR(150) DEFAULT 'simcha_billing',
+            is_enabled BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+
+        // Seed initial cloudinary config if empty
+        const [cloudCount] = await pool.query('SELECT COUNT(*) as count FROM cloudinary_configs')
+        if (cloudCount[0].count === 0) {
+          await pool.query(`
+            INSERT INTO cloudinary_configs (id, cloud_name, api_key, api_secret, folder_name, is_enabled)
+            VALUES (1, '', '', '', 'simcha_billing', true)
+          `)
+          console.log('✨ Seeded default Cloudinary configurations.')
+        }
+        console.log('✅ "cloudinary_configs" table ready.')
+
         return pool
       } catch (error) {
         initPromise = null // Allow retry on failure

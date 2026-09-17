@@ -62,9 +62,9 @@ export default function Sidebar({
       icon: Receipt,
       subItems: [
         { id: 'inward', title: 'Inward' },
-        { id: 'inward-reports', title: 'Inward Reports' },
+        { id: 'inward-reports', title: 'Inward List' },
         { id: 'create-bill', title: 'Outward' },
-        { id: 'all-bills', title: 'All Bills' }
+        { id: 'all-bills', title: 'Outward List' }
       ]
     },
     {

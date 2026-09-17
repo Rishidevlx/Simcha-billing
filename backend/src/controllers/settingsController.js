@@ -57,6 +57,7 @@ export async function updateSettings(req, res) {
       account_no,
       ifsc_code,
       branch,
+      bank_image_url,
       terms_conditions,
       cgst_rate,
       sgst_rate,
@@ -73,10 +74,10 @@ export async function updateSettings(req, res) {
     await pool.query(`
       INSERT INTO settings (
         id, company_name, address, phone, email, gstin,
-        bank_name, account_name, account_no, ifsc_code, branch,
+        bank_name, account_name, account_no, ifsc_code, branch, bank_image_url,
         terms_conditions, cgst_rate, sgst_rate, igst_rate, invoice_prefix
       ) VALUES (
-        1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
       ON DUPLICATE KEY UPDATE
         company_name = VALUES(company_name),
@@ -89,6 +90,7 @@ export async function updateSettings(req, res) {
         account_no = VALUES(account_no),
         ifsc_code = VALUES(ifsc_code),
         branch = VALUES(branch),
+        bank_image_url = VALUES(bank_image_url),
         terms_conditions = VALUES(terms_conditions),
         cgst_rate = VALUES(cgst_rate),
         sgst_rate = VALUES(sgst_rate),
@@ -106,6 +108,7 @@ export async function updateSettings(req, res) {
       account_no || '',
       ifsc_code || '',
       branch || '',
+      bank_image_url || null,
       formattedTerms,
       parseFloat(cgst_rate) || 9.00,
       parseFloat(sgst_rate) || 9.00,

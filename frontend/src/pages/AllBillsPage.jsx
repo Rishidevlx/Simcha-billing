@@ -32,6 +32,10 @@ import * as XLSX from 'xlsx'
 import Swal from 'sweetalert2'
 import InvoiceModal from '../components/invoice/InvoiceModal'
 import InvoiceTemplate from '../components/invoice/InvoiceTemplate'
+import ListPageHeader from '../components/common/ListPageHeader'
+import ListKpiCard from '../components/common/ListKpiCard'
+import ListDateRangeFilter from '../components/common/ListDateRangeFilter'
+import ListPagePagination from '../components/common/ListPagePagination'
 import { API_ENDPOINTS } from '../config/api'
 
 export default function AllBillsPage({ setActiveRoute }) {
@@ -384,89 +388,62 @@ export default function AllBillsPage({ setActiveRoute }) {
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-16 font-['Poppins',sans-serif]">
       
-      {/* 1. Header & Quick Action Banner (Boxie Design) */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-none border border-gray-200 dark:border-slate-800 shadow-xs transition-colors">
-        <div>
-          <h1 className="text-xl font-bold text-[#292424] dark:text-white uppercase tracking-wide">
-            All Invoices &amp; Bills
-          </h1>
-          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-            Manage billing records, export customer receipts, and review payment status.
-          </p>
-        </div>
+      {/* 1. Header & Quick Action Banner */}
+      <ListPageHeader
+        title="Outward List"
+        subtitle="Manage billing records, export customer receipts, and review payment status."
+        actions={
+          <>
+            <button
+              onClick={handleExportExcel}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0f766e] hover:bg-[#115e59] text-white font-bold text-xs rounded-none shadow-xs transition-all active:scale-[0.99] cursor-pointer"
+              title={selectedBillIds.length > 0 ? `Export ${selectedBillIds.length} Selected Bill(s)` : 'Export All Filtered Bills'}
+            >
+              <Download size={15} />
+              <span>
+                {selectedBillIds.length > 0 ? `EXPORT SELECTED (${selectedBillIds.length})` : 'EXPORT TO EXCEL'}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveRoute('create-bill')}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#043486] hover:bg-[#0248BC] text-white font-bold text-xs rounded-none shadow-xs transition-all active:scale-[0.99] cursor-pointer"
+            >
+              <Plus size={15} />
+              <span>CREATE NEW BILL</span>
+            </button>
+          </>
+        }
+      />
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Excel Export Button */}
-          <button
-            onClick={handleExportExcel}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0f766e] hover:bg-[#115e59] text-white font-bold text-xs rounded-none shadow-xs transition-all active:scale-[0.99] cursor-pointer"
-            title={selectedBillIds.length > 0 ? `Export ${selectedBillIds.length} Selected Bill(s)` : 'Export All Filtered Bills'}
-          >
-            <Download size={15} />
-            <span>
-              {selectedBillIds.length > 0 ? `EXPORT SELECTED (${selectedBillIds.length})` : 'EXPORT TO EXCEL'}
-            </span>
-          </button>
-
-          {/* Create Bill Button */}
-          <button
-            onClick={() => setActiveRoute('create-bill')}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#043486] hover:bg-[#0248BC] text-white font-bold text-xs rounded-none shadow-xs transition-all active:scale-[0.99] cursor-pointer"
-          >
-            <Plus size={15} />
-            <span>CREATE NEW BILL</span>
-          </button>
-        </div>
-      </div>
-
-      {/* KPI Stats Grid (Boxie Design) */}
+      {/* 2. KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-none border border-gray-200 dark:border-slate-800 shadow-xs flex items-center justify-between transition-colors">
-          <div>
-            <span className="text-[11px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Total Invoices</span>
-            <p className="text-2xl font-black text-[#292424] dark:text-white mt-1 font-mono">{stats.totalBills}</p>
-          </div>
-          <div className="w-10 h-10 rounded-none bg-blue-50 dark:bg-blue-950/60 text-[#043486] dark:text-blue-400 flex items-center justify-center font-bold border border-blue-100 dark:border-blue-900">
-            <Receipt size={20} />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-none border border-gray-200 dark:border-slate-800 shadow-xs flex items-center justify-between transition-colors">
-          <div>
-            <span className="text-[11px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Total Revenue</span>
-            <p className="text-2xl font-black text-[#043486] dark:text-blue-400 mt-1 font-mono">
-              ₹ {stats.totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-none bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold border border-emerald-100 dark:border-emerald-900">
-            <IndianRupee size={20} />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-none border border-gray-200 dark:border-slate-800 shadow-xs flex items-center justify-between transition-colors">
-          <div>
-            <span className="text-[11px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Paid Invoices</span>
-            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 font-mono">{stats.paidCount}</p>
-          </div>
-          <div className="w-10 h-10 rounded-none bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-100 dark:border-emerald-900">
-            <CheckCircle2 size={20} />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-none border border-gray-200 dark:border-slate-800 shadow-xs flex items-center justify-between transition-colors">
-          <div>
-            <span className="text-[11px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Pending / Partial</span>
-            <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 font-mono">{stats.pendingCount}</p>
-          </div>
-          <div className="w-10 h-10 rounded-none bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-100 dark:border-amber-900">
-            <Clock size={20} />
-          </div>
-        </div>
-
+        <ListKpiCard
+          label="Total Invoices"
+          value={stats.totalBills}
+          icon={Receipt}
+          variant="blue"
+        />
+        <ListKpiCard
+          label="Total Revenue"
+          value={`₹ ${stats.totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+          icon={IndianRupee}
+          variant="blueValue"
+        />
+        <ListKpiCard
+          label="Paid Invoices"
+          value={stats.paidCount}
+          icon={CheckCircle2}
+          variant="emerald"
+        />
+        <ListKpiCard
+          label="Pending / Partial"
+          value={stats.pendingCount}
+          icon={Clock}
+          variant="amber"
+        />
       </div>
 
-      {/* 2. Advanced Multi-Filter Bar & Date Range Filtering */}
+      {/* 3. Advanced Multi-Filter Bar & Date Range Filtering */}
       <div className="bg-white dark:bg-slate-900 p-5 rounded-none border border-gray-200 dark:border-slate-800 shadow-xs space-y-4 transition-colors">
         
         {/* Top Filter Row: Search & Status / Type / Mode Dropdowns */}
@@ -554,70 +531,22 @@ export default function AllBillsPage({ setActiveRoute }) {
         </div>
 
         {/* Date to Date Range Filter Row */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-3 border-t border-gray-200 dark:border-slate-800">
-          
-          {/* Quick Date Range Preset Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 text-xs">
-            <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase mr-1 flex items-center gap-1">
-              <Calendar size={13} />
-              <span>Date:</span>
-            </span>
-            {[
-              { id: 'ALL', label: 'All Time' },
-              { id: 'TODAY', label: 'Today' },
-              { id: 'THIS_WEEK', label: 'This Week' },
-              { id: 'THIS_MONTH', label: 'This Month' },
-              { id: 'CUSTOM', label: 'Custom' }
-            ].map(p => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => handleDatePresetChange(p.id)}
-                className={`px-3 py-1.5 font-semibold transition-all cursor-pointer ${
-                  datePreset === p.id
-                    ? 'bg-[#043486] text-white'
-                    : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Custom Date Pickers (From -> To) */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-gray-500 font-medium">From:</span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value)
-                  setDatePreset('CUSTOM')
-                  setCurrentPage(1)
-                }}
-                className="px-2.5 py-1.5 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486]"
-              />
-            </div>
-
-            <span className="text-gray-400 text-xs">to</span>
-
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-gray-500 font-medium">To:</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value)
-                  setDatePreset('CUSTOM')
-                  setCurrentPage(1)
-                }}
-                className="px-2.5 py-1.5 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486]"
-              />
-            </div>
-          </div>
-
-        </div>
+        <ListDateRangeFilter
+          datePreset={datePreset}
+          onDatePresetChange={handleDatePresetChange}
+          startDate={startDate}
+          onStartDateChange={(val) => {
+            setStartDate(val)
+            setDatePreset('CUSTOM')
+            setCurrentPage(1)
+          }}
+          endDate={endDate}
+          onEndDateChange={(val) => {
+            setEndDate(val)
+            setDatePreset('CUSTOM')
+            setCurrentPage(1)
+          }}
+        />
 
       </div>
 
@@ -781,80 +710,18 @@ export default function AllBillsPage({ setActiveRoute }) {
           </div>
         )}
 
-        {/* 4. Exact Pagination Bar matching reference diagram */}
-        <div className="px-6 py-3 bg-[#f8fafc] dark:bg-slate-950 border-t border-gray-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium text-gray-600 dark:text-slate-300">
-          
-          {/* Items Per Page Selector */}
-          <div className="flex items-center gap-2">
-            <span>Items per page:</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => {
-                setItemsPerPage(Number(e.target.value))
-                setCurrentPage(1)
-              }}
-              className="px-2 py-1 font-semibold text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] cursor-pointer"
-            >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-
-          {/* Item Count Summary (e.g. 1-10 of 100 items) */}
-          <div className="text-gray-500 dark:text-slate-400 font-mono text-xs">
-            {totalItems === 0 ? (
-              '0 of 0 items'
-            ) : (
-              <span>{startIndex + 1}-{endIndex} of {totalItems} items</span>
-            )}
-          </div>
-
-          {/* Page Selector & Prev / Next Arrows */}
-          <div className="flex items-center gap-3">
-            
-            {/* Page Select Dropdown */}
-            <div className="flex items-center gap-1.5">
-              <span>Page</span>
-              <select
-                value={currentPage}
-                onChange={(e) => handlePageChange(Number(e.target.value))}
-                className="px-2 py-1 font-semibold text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] cursor-pointer"
-              >
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-              <span>of {totalPages} pages</span>
-            </div>
-
-            {/* Navigation Arrow Buttons */}
-            <div className="flex items-center border border-gray-300 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1 || totalItems === 0}
-                className="p-1.5 bg-white dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed border-r border-gray-300 dark:border-slate-700 transition-colors cursor-pointer"
-                title="Previous Page"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages || totalItems === 0}
-                className="p-1.5 bg-white dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                title="Next Page"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-
-          </div>
-
-        </div>
+        {/* 4. Exact Pagination Bar */}
+        <ListPagePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredBills.length}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={(val) => {
+            setItemsPerPage(val)
+            setCurrentPage(1)
+          }}
+          onPageChange={handlePageChange}
+        />
 
       </div>
 

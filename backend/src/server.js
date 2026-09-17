@@ -9,6 +9,7 @@ import settingsRoutes from './routes/settingsRoutes.js'
 import billRoutes from './routes/billRoutes.js'
 import emailRoutes from './routes/emailRoutes.js'
 import inwardRoutes from './routes/inwardRoutes.js'
+import cloudinaryRoutes from './routes/cloudinaryRoutes.js'
 
 dotenv.config()
 
@@ -22,7 +23,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }))
 app.options('*', cors())
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
+app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
 // Ensure TiDB Database Connection in Serverless & Local environments
 app.use(async (req, res, next) => {
@@ -48,6 +50,7 @@ app.use('/api/settings', settingsRoutes)
 app.use('/api/bills', billRoutes)
 app.use('/api/inwards', inwardRoutes)
 app.use('/api/email-config', emailRoutes)
+app.use('/api/cloudinary', cloudinaryRoutes)
 
 
 // Global Error Handler

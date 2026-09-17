@@ -22,6 +22,9 @@ export const API_ENDPOINTS = {
   INWARDS: `${API_BASE_URL}/api/inwards`,
   INWARD_BY_ID: (id) => `${API_BASE_URL}/api/inwards/${id}`,
   NEXT_INWARD_NUMBER: `${API_BASE_URL}/api/inwards/meta/next-number`,
+  CLOUDINARY_CONFIG: `${API_BASE_URL}/api/cloudinary/config`,
+  CLOUDINARY_TEST: `${API_BASE_URL}/api/cloudinary/test`,
+  CLOUDINARY_UPLOAD: `${API_BASE_URL}/api/cloudinary/upload`,
   VERIFY_SERIAL: (serial) => `${API_BASE_URL}/api/materials/verify-serial/${encodeURIComponent(serial)}`,
   HEALTH: `${API_BASE_URL}/api/health`
 }

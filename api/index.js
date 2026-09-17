@@ -8,6 +8,7 @@ import materialRoutes from '../backend/src/routes/materialRoutes.js'
 import settingsRoutes from '../backend/src/routes/settingsRoutes.js'
 import billRoutes from '../backend/src/routes/billRoutes.js'
 import inwardRoutes from '../backend/src/routes/inwardRoutes.js'
+import cloudinaryRoutes from '../backend/src/routes/cloudinaryRoutes.js'
 
 dotenv.config()
 
@@ -19,7 +20,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
+app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
 // Database Connection Middleware for Serverless
 let isDbReady = false
@@ -47,6 +49,7 @@ app.use('/api/materials', materialRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/bills', billRoutes)
 app.use('/api/inwards', inwardRoutes)
+app.use('/api/cloudinary', cloudinaryRoutes)
 
 
 // Error Handler

@@ -74,8 +74,10 @@ export default function InwardBillPage({ setActiveRoute }) {
   const [supplierLocation, setSupplierLocation] = useState('33 - Tamil Nadu')
   const [supplierGstin, setSupplierGstin] = useState('')
 
-  // Hardcopy Bill Upload (Client-side UI only)
+  // Hardcopy Bill Upload (Cloudinary storage)
   const [uploadedBill, setUploadedBill] = useState(null)
+  const [hardcopyUrl, setHardcopyUrl] = useState('')
+  const [isUploadingBill, setIsUploadingBill] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
 
   // Step 2: Inward Materials Line Items
@@ -383,7 +385,7 @@ export default function InwardBillPage({ setActiveRoute }) {
     })
   }
 
-  // Handle File Upload (Client-side only)
+  // Handle File Upload (Uploads to Cloudinary)
   const handleFileUpload = (file) => {
     if (!file) return
     if (file.size > 10 * 1024 * 1024) {
@@ -396,10 +398,45 @@ export default function InwardBillPage({ setActiveRoute }) {
       return
     }
     setUploadedBill(file)
-    Toast.fire({
-      icon: 'success',
-      title: 'Hardcopy bill attached'
-    })
+    setIsUploadingBill(true)
+
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const base64Data = e.target.result
+      try {
+        const res = await fetch(API_ENDPOINTS.CLOUDINARY_UPLOAD, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file: base64Data,
+            folder: 'simcha_billing/inward_bills'
+          })
+        })
+        const data = await res.json()
+        if (data.success && data.url) {
+          setHardcopyUrl(data.url)
+          Toast.fire({
+            icon: 'success',
+            title: 'Bill uploaded to Cloudinary'
+          })
+        } else {
+          setHardcopyUrl(base64Data)
+          Toast.fire({
+            icon: 'info',
+            title: 'Hardcopy bill attached'
+          })
+        }
+      } catch (err) {
+        setHardcopyUrl(base64Data)
+        Toast.fire({
+          icon: 'info',
+          title: 'Hardcopy bill attached'
+        })
+      } finally {
+        setIsUploadingBill(false)
+      }
+    }
+    reader.readAsDataURL(file)
   }
 
   const handleReset = () => {
@@ -410,6 +447,7 @@ export default function InwardBillPage({ setActiveRoute }) {
     setSupplierGstin('')
     setInwardDate(new Date().toISOString().split('T')[0])
     setUploadedBill(null)
+    setHardcopyUrl('')
     setItems([
       {
         material_id: '',
@@ -504,6 +542,7 @@ export default function InwardBillPage({ setActiveRoute }) {
           total_tax: totalTaxAmount,
           total_amount: grandTotalAmount,
           total_quantity: totalQuantity,
+          hardcopy_url: hardcopyUrl || null,
           items: validItems.map(it => ({
             material_id: it.material_id || null,
             item_name: it.item_name,
@@ -534,7 +573,7 @@ export default function InwardBillPage({ setActiveRoute }) {
             showCancelButton: true,
             confirmButtonColor: '#043486',
             cancelButtonColor: '#4b5563',
-            confirmButtonText: 'View Inward Reports',
+            confirmButtonText: 'View Inward List',
             cancelButtonText: 'Create Another Inward'
           })
 
@@ -874,15 +913,17 @@ export default function InwardBillPage({ setActiveRoute }) {
                   }}
                   className={`border-2 border-dashed p-5 text-center transition-all cursor-pointer ${
                     isDragging
-                      ? 'border-[#043486] bg-blue-50/60 dark:bg-blue-950/40'
-                      : 'border-gray-300 dark:border-slate-700 hover:border-[#043486] bg-gray-50/50 dark:bg-slate-950/40'
+                      ? 'border-[#043486] bg-blue-50/50 dark:bg-blue-950/30'
+                      : isUploadingBill
+                      ? 'border-blue-400 bg-blue-50/30 dark:bg-slate-800/40 cursor-wait'
+                      : 'border-gray-300 dark:border-slate-700 hover:border-[#043486] dark:hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-slate-800/50'
                   }`}
-                  onClick={() => document.getElementById('hardcopy-upload-input')?.click()}
+                  onClick={() => !isUploadingBill && document.getElementById('hardcopy-file-input')?.click()}
                 >
                   <input
-                    id="hardcopy-upload-input"
+                    id="hardcopy-file-input"
                     type="file"
-                    accept="image/*,application/pdf"
+                    accept="image/*,.pdf"
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
@@ -891,20 +932,29 @@ export default function InwardBillPage({ setActiveRoute }) {
                     }}
                   />
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-950/60 text-[#043486] dark:text-blue-400 flex items-center justify-center">
-                      <UploadCloud size={20} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-gray-700 dark:text-slate-200">
-                        Upload Hardcopy Bill
-                      </p>
-                      <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
-                        Drag &amp; drop or <span className="text-[#043486] dark:text-blue-400 font-bold underline">browse</span>
-                      </p>
-                    </div>
-                    <p className="text-[10px] text-gray-400 dark:text-slate-500">
-                      PDF, JPG, PNG up to 10MB
-                    </p>
+                    {isUploadingBill ? (
+                      <>
+                        <div className="w-8 h-8 border-2 border-[#043486] border-t-transparent rounded-full animate-spin" />
+                        <p className="text-xs font-bold text-[#043486] dark:text-blue-400">Uploading to Cloudinary...</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 rounded-none bg-blue-50 dark:bg-blue-900/30 text-[#043486] dark:text-blue-400 flex items-center justify-center">
+                          <UploadCloud size={20} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">
+                            Upload Bill / Invoice Document
+                          </p>
+                          <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
+                            Drag &amp; drop or <span className="text-[#043486] dark:text-blue-400 font-bold underline">browse</span>
+                          </p>
+                        </div>
+                        <p className="text-[10px] text-gray-400 dark:text-slate-500">
+                          PDF, JPG, PNG up to 10MB
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
               ) : (

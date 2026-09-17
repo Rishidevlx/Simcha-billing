@@ -59,6 +59,7 @@ export async function createInwardBill(req, res) {
       total_tax = 0,
       total_amount = 0,
       total_quantity = 0,
+      hardcopy_url,
       items = []
     } = req.body
 
@@ -111,8 +112,8 @@ export async function createInwardBill(req, res) {
         supplier_email, supplier_location, supplier_gstin,
         taxable_amount, cgst_rate, cgst_amount, sgst_rate, sgst_amount,
         igst_rate, igst_amount, total_tax, total_amount,
-        total_quantity, total_items
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        total_quantity, total_items, hardcopy_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       finalInwardNumber,
       inward_date || new Date().toISOString().split('T')[0],
@@ -131,7 +132,8 @@ export async function createInwardBill(req, res) {
       parseFloat(total_tax) || 0,
       parseFloat(total_amount) || 0,
       parseFloat(total_quantity) || 0,
-      items.length
+      items.length,
+      hardcopy_url || null
     ])
 
     const inwardId = inwardResult.insertId

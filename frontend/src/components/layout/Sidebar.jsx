@@ -16,6 +16,7 @@ import faviconImg from '../../assets/Logo/Favicon.jpeg'
 export default function Sidebar({
   isCollapsed,
   activeRoute,
+  activePath = '',
   setActiveRoute,
   isMobileOpen,
   closeMobileSidebar
@@ -30,15 +31,22 @@ export default function Sidebar({
   // State for hover flyout when collapsed
   const [hoveredMenuId, setHoveredMenuId] = useState(null)
 
+  // Determine active route from path or fallback
+  const currentPath = activePath || (activeRoute ? `/${activeRoute}` : '/dashboard')
+
   useEffect(() => {
-    if (activeRoute === 'profile-settings' || activeRoute === 'system-settings' || activeRoute === 'configurations-settings') {
+    if (currentPath.includes('settings')) {
       setOpenMenus(prev => ({ ...prev, settings: true }))
-    } else if (activeRoute === 'add-material' || activeRoute === 'all-materials') {
+    } else if (currentPath.includes('material')) {
       setOpenMenus(prev => ({ ...prev, materials: true }))
-    } else if (activeRoute === 'inward' || activeRoute === 'inward-reports' || activeRoute === 'create-bill' || activeRoute === 'all-bills') {
+    } else if (
+      currentPath.includes('inward') ||
+      currentPath.includes('outward') ||
+      currentPath.includes('bill')
+    ) {
       setOpenMenus(prev => ({ ...prev, bills: true }))
     }
-  }, [activeRoute])
+  }, [currentPath])
 
   const toggleMenu = (key) => {
     if (isCollapsed) return
@@ -48,13 +56,13 @@ export default function Sidebar({
     }))
   }
 
-
-  // Menu items list matching user specification
+  // Menu items list with URL paths
   const menuConfig = [
     {
       id: 'dashboard',
       title: 'Dashboard',
       icon: LayoutDashboard,
+      path: '/dashboard',
       single: true
     },
     {
@@ -62,16 +70,17 @@ export default function Sidebar({
       title: 'Bills',
       icon: Receipt,
       subItems: [
-        { id: 'inward', title: 'Inward' },
-        { id: 'inward-reports', title: 'Inward List' },
-        { id: 'create-bill', title: 'Outward' },
-        { id: 'all-bills', title: 'Outward List' }
+        { id: 'inward', title: 'Inward', path: '/inward' },
+        { id: 'inward-reports', title: 'Inward List', path: '/inward-list' },
+        { id: 'create-bill', title: 'Outward', path: '/outward' },
+        { id: 'all-bills', title: 'Outward List', path: '/outward-list' }
       ]
     },
     {
       id: 'categories',
       title: 'Categories',
       icon: Layers,
+      path: '/categories',
       single: true
     },
     {
@@ -79,14 +88,15 @@ export default function Sidebar({
       title: 'Materials',
       icon: Boxes,
       subItems: [
-        { id: 'add-material', title: 'Add Material' },
-        { id: 'all-materials', title: 'All Materials' }
+        { id: 'add-material', title: 'Add Material', path: '/materials/add' },
+        { id: 'all-materials', title: 'All Materials', path: '/materials' }
       ]
     },
     {
       id: 'inventory',
       title: 'Stock & Inventory',
       icon: PackageOpen,
+      path: '/inventory',
       single: true
     },
     {
@@ -94,15 +104,31 @@ export default function Sidebar({
       title: 'Settings',
       icon: Settings,
       subItems: [
-        { id: 'profile-settings', title: 'Profile Settings' },
-        { id: 'system-settings', title: 'System Settings' },
-        { id: 'configurations-settings', title: 'Configurations Settings' }
+        { id: 'profile-settings', title: 'Profile Settings', path: '/settings/profile' },
+        { id: 'system-settings', title: 'System Settings', path: '/settings/system' },
+        { id: 'configurations-settings', title: 'Configurations Settings', path: '/settings/configurations' }
       ]
     }
   ]
 
-  const handleItemClick = (id) => {
-    setActiveRoute(id)
+  const isSubActive = (sub) => {
+    if (currentPath === sub.path) return true
+    if (sub.id === activeRoute) return true
+    if (sub.id === 'inward-reports' && (currentPath === '/inward-reports' || currentPath === '/inward-list')) return true
+    if (sub.id === 'create-bill' && (currentPath === '/create-bill' || currentPath === '/outward')) return true
+    if (sub.id === 'all-bills' && (currentPath === '/all-bills' || currentPath === '/outward-list' || currentPath === '/bills')) return true
+    if (sub.id === 'all-materials' && (currentPath === '/all-materials' || currentPath === '/materials')) return true
+    if (sub.id === 'add-material' && (currentPath === '/add-material' || currentPath === '/materials/add')) return true
+    if (sub.id === 'profile-settings' && (currentPath === '/profile-settings' || currentPath === '/settings/profile' || currentPath === '/profile')) return true
+    if (sub.id === 'system-settings' && (currentPath === '/system-settings' || currentPath === '/settings/system')) return true
+    if (sub.id === 'configurations-settings' && (currentPath === '/configurations-settings' || currentPath === '/settings/configurations')) return true
+    return false
+  }
+
+  const handleItemClick = (target) => {
+    if (setActiveRoute) {
+      setActiveRoute(target)
+    }
     setHoveredMenuId(null)
     if (closeMobileSidebar) closeMobileSidebar()
   }
@@ -156,8 +182,8 @@ export default function Sidebar({
                 const Icon = item.icon
                 const isSingle = item.single
                 const isMenuOpen = openMenus[item.id]
-                const isActiveParent = !isSingle && item.subItems.some(sub => sub.id === activeRoute)
-                const isSingleActive = isSingle && activeRoute === item.id
+                const isActiveParent = !isSingle && item.subItems.some(sub => isSubActive(sub))
+                const isSingleActive = isSingle && (currentPath === item.path || (item.id === 'dashboard' && (currentPath === '/' || currentPath === '/dashboard')) || currentPath === `/${item.id}`)
                 const isHovered = isCollapsed && hoveredMenuId === item.id
 
                 return (
@@ -170,7 +196,7 @@ export default function Sidebar({
                     {isSingle ? (
                       /* Single Item (e.g. Dashboard, Categories) */
                       <button
-                        onClick={() => handleItemClick(item.id)}
+                        onClick={() => handleItemClick(item.path || item.id)}
                         className={`w-full flex items-center ${
                           isCollapsed ? 'justify-center p-3' : 'justify-between px-3.5 py-2.5'
                         } rounded-xs text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer ${
@@ -214,20 +240,20 @@ export default function Sidebar({
                         {!isCollapsed && isMenuOpen && (
                           <div className="mt-1 ml-3.5 pl-3 border-l border-white/20 dark:border-slate-800 space-y-1 py-1">
                             {item.subItems.map((sub) => {
-                              const isSubActive = activeRoute === sub.id
+                              const active = isSubActive(sub)
                               return (
                                 <button
                                   key={sub.id}
-                                  onClick={() => handleItemClick(sub.id)}
+                                  onClick={() => handleItemClick(sub.path || sub.id)}
                                   className={`w-full text-left px-3 py-2 rounded-xs text-[13.5px] font-medium transition-all duration-150 flex items-center gap-2.5 cursor-pointer ${
-                                    isSubActive
+                                    active
                                       ? 'bg-white/20 dark:bg-blue-600/20 text-white dark:text-blue-400 font-bold border border-white/20 dark:border-blue-500/30'
                                       : 'text-blue-100/90 dark:text-slate-300 hover:text-white hover:bg-white/10 dark:hover:bg-slate-800/70 border border-transparent'
                                   }`}
                                 >
                                   <Circle
                                     size={6}
-                                    className={isSubActive ? 'text-white fill-white dark:text-blue-400 dark:fill-blue-400' : 'text-blue-200/60 dark:text-slate-500 fill-blue-200/60 dark:fill-slate-500'}
+                                    className={active ? 'text-white fill-white dark:text-blue-400 dark:fill-blue-400' : 'text-blue-200/60 dark:text-slate-500 fill-blue-200/60 dark:fill-slate-500'}
                                   />
                                   <span>{sub.title}</span>
                                 </button>
@@ -265,20 +291,20 @@ export default function Sidebar({
 
                             <div className="space-y-1">
                               {item.subItems.map((sub) => {
-                                const isSubActive = activeRoute === sub.id
+                                const active = isSubActive(sub)
                                 return (
                                   <button
                                     key={sub.id}
-                                    onClick={() => handleItemClick(sub.id)}
+                                    onClick={() => handleItemClick(sub.path || sub.id)}
                                     className={`w-full text-left px-3 py-2 rounded-xs text-[13.5px] font-medium transition-all duration-150 flex items-center gap-2.5 cursor-pointer ${
-                                      isSubActive
+                                      active
                                         ? 'bg-white/25 dark:bg-blue-600/20 text-white dark:text-blue-400 font-bold border border-white/30 dark:border-blue-500/30'
                                         : 'text-blue-100 dark:text-slate-300 hover:bg-white/15 dark:hover:bg-slate-800 hover:text-white border border-transparent'
                                     }`}
                                   >
                                     <Circle
                                       size={6}
-                                      className={isSubActive ? 'text-white fill-white dark:text-blue-400 dark:fill-blue-400' : 'text-blue-200/60 dark:text-slate-500 fill-blue-200/60 dark:fill-slate-500'}
+                                      className={active ? 'text-white fill-white dark:text-blue-400 dark:fill-blue-400' : 'text-blue-200/60 dark:text-slate-500 fill-blue-200/60 dark:fill-slate-500'}
                                     />
                                     <span>{sub.title}</span>
                                   </button>
@@ -303,3 +329,4 @@ export default function Sidebar({
     </>
   )
 }
+

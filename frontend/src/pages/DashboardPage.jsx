@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { 
   TrendingUp, 
   Receipt, 
@@ -14,22 +15,39 @@ import {
   Settings,
   Sparkles
 } from 'lucide-react'
-import CategoriesPage from './CategoriesPage'
-import AddMaterialPage from './AddMaterialPage'
-import AllMaterialsPage from './AllMaterialsPage'
-import ProfileSettingsPage from './ProfileSettingsPage'
-import CreateBillPage from './CreateBillPage'
-import InwardBillPage from './InwardBillPage'
-import InwardReportsPage from './InwardReportsPage'
-import AllBillsPage from './AllBillsPage'
-import SystemSettingsPage from './SystemSettingsPage'
-import ConfigurationsSettingsPage from './ConfigurationsSettingsPage'
-import InventoryPage from './InventoryPage'
 import InvoiceModal from '../components/invoice/InvoiceModal'
 import { API_ENDPOINTS } from '../config/api'
 
-export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpdateUser }) {
-  const [editingMaterialId, setEditingMaterialId] = useState(null)
+export default function DashboardPage({ setActiveRoute: setActiveRouteProp, user, onUpdateUser }) {
+  const navigate = useNavigate()
+
+  const setActiveRoute = (route) => {
+    if (setActiveRouteProp) {
+      setActiveRouteProp(route)
+    } else {
+      const ROUTE_MAP = {
+        'dashboard': '/dashboard',
+        'inward': '/inward',
+        'inward-reports': '/inward-list',
+        'inward-list': '/inward-list',
+        'create-bill': '/outward',
+        'outward': '/outward',
+        'all-bills': '/outward-list',
+        'outward-list': '/outward-list',
+        'categories': '/categories',
+        'materials': '/materials',
+        'all-materials': '/materials',
+        'add-material': '/materials/add',
+        'inventory': '/inventory',
+        'stock': '/inventory',
+        'profile-settings': '/settings/profile',
+        'system-settings': '/settings/system',
+        'configurations-settings': '/settings/configurations'
+      }
+      navigate(ROUTE_MAP[route] || (route.startsWith('/') ? route : `/${route}`))
+    }
+  }
+
   const [dashboardStats, setDashboardStats] = useState({
     totalRevenue: 2849,
     totalBills: 1,
@@ -42,60 +60,58 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
   const [settings, setSettings] = useState(null)
 
   useEffect(() => {
-    if (activeRoute === 'dashboard') {
-      const fetchDashboardData = async () => {
-        try {
-          const [billsRes, matRes, settingsRes] = await Promise.all([
-            fetch(API_ENDPOINTS.BILLS),
-            fetch(API_ENDPOINTS.MATERIALS),
-            fetch(API_ENDPOINTS.SETTINGS)
-          ])
-          const billsData = await billsRes.json()
-          const matData = await matRes.json()
-          const settingsData = await settingsRes.json()
+    const fetchDashboardData = async () => {
+      try {
+        const [billsRes, matRes, settingsRes] = await Promise.all([
+          fetch(API_ENDPOINTS.BILLS),
+          fetch(API_ENDPOINTS.MATERIALS),
+          fetch(API_ENDPOINTS.SETTINGS)
+        ])
+        const billsData = await billsRes.json()
+        const matData = await matRes.json()
+        const settingsData = await settingsRes.json()
 
-          if (settingsData.success && settingsData.settings) {
-            setSettings(settingsData.settings)
-          }
-
-          if (billsData.success) {
-            const allBills = billsData.bills || []
-            const rev = allBills.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0)
-            const pending = allBills.filter(b => b.payment_status === 'Pending').length
-
-            setDashboardStats(prev => ({
-              ...prev,
-              totalRevenue: rev,
-              totalBills: allBills.length,
-              pendingInvoices: pending
-            }))
-
-            setRecentBills(
-              allBills.slice(0, 5).map(b => ({
-                id: b.id,
-                invoiceNumber: b.invoice_number,
-                customer: b.customer_name,
-                date: new Date(b.invoice_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-                amount: `₹ ${parseFloat(b.total_amount).toLocaleString('en-IN')}`,
-                status: b.payment_status
-              }))
-            )
-          }
-
-          if (matData.success && matData.materials) {
-            setDashboardStats(prev => ({
-              ...prev,
-              activeMaterials: matData.materials.filter(m => m.status === 'Active').length
-            }))
-          }
-        } catch (err) {
-          console.error('Error fetching dashboard summary:', err)
+        if (settingsData.success && settingsData.settings) {
+          setSettings(settingsData.settings)
         }
-      }
 
-      fetchDashboardData()
+        if (billsData.success) {
+          const allBills = billsData.bills || []
+          const rev = allBills.reduce((sum, b) => sum + (parseFloat(b.total_amount) || 0), 0)
+          const pending = allBills.filter(b => b.payment_status === 'Pending').length
+
+          setDashboardStats(prev => ({
+            ...prev,
+            totalRevenue: rev,
+            totalBills: allBills.length,
+            pendingInvoices: pending
+          }))
+
+          setRecentBills(
+            allBills.slice(0, 5).map(b => ({
+              id: b.id,
+              invoiceNumber: b.invoice_number,
+              customer: b.customer_name,
+              date: new Date(b.invoice_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+              amount: `₹ ${parseFloat(b.total_amount).toLocaleString('en-IN')}`,
+              status: b.payment_status
+            }))
+          )
+        }
+
+        if (matData.success && matData.materials) {
+          setDashboardStats(prev => ({
+            ...prev,
+            activeMaterials: matData.materials.filter(m => m.status === 'Active').length
+          }))
+        }
+      } catch (err) {
+        console.error('Error fetching dashboard summary:', err)
+      }
     }
-  }, [activeRoute])
+
+    fetchDashboardData()
+  }, [])
 
   const handleOpenBillModal = async (billId) => {
     try {
@@ -112,90 +128,6 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
     }
   }
 
-  // Route handlers for direct pages
-  if (activeRoute === 'inward') {
-    return <InwardBillPage setActiveRoute={setActiveRoute} />
-  }
-
-  if (activeRoute === 'inward-reports') {
-    return <InwardReportsPage setActiveRoute={setActiveRoute} />
-  }
-
-  if (activeRoute === 'create-bill') {
-    return <CreateBillPage setActiveRoute={setActiveRoute} />
-  }
-
-  if (activeRoute === 'all-bills' || activeRoute === 'bills') {
-    return <AllBillsPage setActiveRoute={setActiveRoute} />
-  }
-
-  if (activeRoute === 'system-settings') {
-    return <SystemSettingsPage />
-  }
-
-  if (activeRoute === 'configurations-settings') {
-    return <ConfigurationsSettingsPage setActiveRoute={setActiveRoute} />
-  }
-
-  if (activeRoute === 'categories') {
-    return <CategoriesPage />
-  }
-
-  if (activeRoute === 'profile-settings' || activeRoute === 'profile') {
-    return <ProfileSettingsPage user={user} onUpdateUser={onUpdateUser} />
-  }
-
-  if (activeRoute === 'add-material' || activeRoute === 'create-materials') {
-    return (
-      <AddMaterialPage
-        editMaterialId={editingMaterialId}
-        onSaved={() => {
-          setEditingMaterialId(null)
-          setActiveRoute('all-materials')
-        }}
-        setActiveRoute={(route) => {
-          setEditingMaterialId(null)
-          setActiveRoute(route)
-        }}
-      />
-    )
-  }
-
-  if (activeRoute === 'all-materials' || activeRoute === 'materials') {
-    return (
-      <AllMaterialsPage
-        setActiveRoute={setActiveRoute}
-        onEditMaterial={(id) => {
-          setEditingMaterialId(id)
-          setActiveRoute('add-material')
-        }}
-      />
-    )
-  }
-
-  if (activeRoute === 'inventory' || activeRoute === 'stock') {
-    return <InventoryPage setActiveRoute={setActiveRoute} />
-  }
-
-  // Breadcrumb & Page Info mapper
-  const getPageInfo = () => {
-    switch (activeRoute) {
-      case 'inward':
-        return { title: 'INWARD BILL', path: ['Bills', 'Inward'], icon: Receipt }
-      case 'create-bill':
-        return { title: 'CREATE BILL', path: ['Bills', 'Create Bill'], icon: Receipt }
-      case 'all-bills':
-        return { title: 'ALL BILLS', path: ['Bills', 'All Bills'], icon: Receipt }
-      case 'profile-settings':
-        return { title: 'PROFILE SETTINGS', path: ['Settings', 'Profile Settings'], icon: Settings }
-      case 'system-settings':
-        return { title: 'SYSTEM SETTINGS', path: ['Settings', 'System Settings'], icon: Settings }
-      default:
-        return { title: 'DASHBOARD', path: ['Home', 'Dashboard'], icon: TrendingUp }
-    }
-  }
-
-  const { title, path, icon: RouteIcon } = getPageInfo()
 
   // Dynamic stats array
   const stats = [
@@ -233,7 +165,6 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
     }
   ]
 
-
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       
@@ -241,51 +172,19 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2">
         <div>
           <h1 className="text-lg sm:text-xl font-bold tracking-tight text-[#292424] dark:text-white uppercase">
-            {title}
+            DASHBOARD
           </h1>
         </div>
         <div className="flex items-center text-xs text-gray-500 dark:text-slate-400 gap-1.5 font-medium">
-          {path.map((item, idx) => (
-            <span key={idx} className="flex items-center gap-1.5">
-              <span className={idx === path.length - 1 ? 'text-[#043486] dark:text-blue-400 font-semibold' : 'hover:text-gray-700 dark:hover:text-slate-200'}>
-                {item}
-              </span>
-              {idx < path.length - 1 && <span>›</span>}
-            </span>
-          ))}
+          <span>Home</span>
+          <span>›</span>
+          <span className="text-[#043486] dark:text-blue-400 font-semibold">Dashboard</span>
         </div>
       </div>
 
-      {/* If on subpages: Clean "Coming Soon" Demo View */}
-      {activeRoute !== 'dashboard' ? (
-        <div className="bg-white dark:bg-slate-900 rounded-sm p-8 border border-gray-200/80 dark:border-slate-800 shadow-xs">
-          <div className="max-w-md mx-auto text-center py-16">
-            <div className="w-16 h-16 rounded-sm bg-blue-50 dark:bg-blue-950 text-[#043486] dark:text-blue-300 mx-auto flex items-center justify-center mb-4 border border-blue-100 dark:border-blue-900 shadow-xs">
-              <RouteIcon size={30} />
-            </div>
-            <span className="inline-block px-3 py-1 rounded-sm text-[11px] font-semibold bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60 mb-2">
-              Coming Soon
-            </span>
-            <h2 className="text-2xl font-bold text-[#292424] dark:text-white capitalize mt-1">
-              {title.toLowerCase()}
-            </h2>
-            <p className="mt-2 text-xs sm:text-sm text-gray-500 dark:text-slate-400 max-w-sm mx-auto">
-              This module interface is ready. Next step-la namma backend API &amp; TiDB integration kooda connect panlam!
-            </p>
-            <div className="mt-6 flex justify-center gap-3">
-              <button
-                onClick={() => setActiveRoute('dashboard')}
-                className="px-5 py-2.5 rounded-sm bg-[#043486] hover:bg-[#0248BC] text-white font-semibold text-xs shadow-md shadow-blue-900/10 transition-all cursor-pointer"
-              >
-                Back to Dashboard
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* Top 4 Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
+      {/* Top 4 Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
+
             {stats.map((stat, index) => {
               const Icon = stat.icon
               const targetRoute = index === 2 ? 'all-materials' : 'all-bills'
@@ -479,8 +378,6 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
             </div>
 
           </div>
-        </>
-      )}
 
       {/* Invoice Modal Preview */}
       {selectedBillForPreview && (
@@ -494,3 +391,4 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
     </div>
   )
 }
+

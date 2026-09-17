@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Boxes,
   Tag,
@@ -25,7 +26,21 @@ import Swal from 'sweetalert2'
 import SearchableSelect from '../components/common/SearchableSelect'
 import { API_ENDPOINTS } from '../config/api'
 
-export default function AddMaterialPage({ editMaterialId = null, onSaved, setActiveRoute }) {
+export default function AddMaterialPage({ editMaterialId = null, onSaved, setActiveRoute: setActiveRouteProp }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  const queryId = new URLSearchParams(location.search).get('id')
+  const targetEditId = editMaterialId || location.state?.editMaterialId || queryId || null
+
+  const setActiveRoute = (route) => {
+    if (setActiveRouteProp) {
+      setActiveRouteProp(route)
+    } else {
+      navigate('/materials')
+    }
+  }
+
   // Form State
   const [formData, setFormData] = useState({
     name: '',
@@ -138,10 +153,11 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
 
   useEffect(() => {
     fetchCategories()
-    if (editMaterialId) {
-      fetchMaterialDetails(editMaterialId)
+    if (targetEditId) {
+      fetchMaterialDetails(targetEditId)
     }
-  }, [editMaterialId])
+  }, [targetEditId])
+
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -238,8 +254,8 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
 
     setIsSubmitting(true)
     try {
-      const url = editMaterialId ? API_ENDPOINTS.MATERIAL_BY_ID(editMaterialId) : API_ENDPOINTS.MATERIALS
-      const method = editMaterialId ? 'PUT' : 'POST'
+      const url = targetEditId ? API_ENDPOINTS.MATERIAL_BY_ID(targetEditId) : API_ENDPOINTS.MATERIALS
+      const method = targetEditId ? 'PUT' : 'POST'
 
       const res = await fetch(url, {
         method,
@@ -255,13 +271,13 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
 
       Swal.fire({
         icon: 'success',
-        title: editMaterialId ? 'Material Updated!' : 'Material Created!',
+        title: targetEditId ? 'Material Updated!' : 'Material Created!',
         text: data.message || 'Material saved successfully in database.',
         timer: 2000,
         showConfirmButton: false
       })
 
-      if (!editMaterialId) {
+      if (!targetEditId) {
         handleClear()
       }
 
@@ -290,7 +306,7 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
         <div>
           <h1 className="text-xl font-bold tracking-tight text-[#292424] dark:text-white uppercase flex items-center gap-2.5">
             <Boxes className="text-[#043486] dark:text-blue-400" size={22} />
-            {editMaterialId ? 'EDIT MATERIAL' : 'ADD MATERIAL'}
+            {targetEditId ? 'EDIT MATERIAL' : 'ADD MATERIAL'}
           </h1>
           <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
             Create and configure inventory billing materials &amp; pricing
@@ -304,7 +320,7 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
             <span>Materials</span>
             <span>›</span>
             <span className="text-[#043486] dark:text-blue-400 font-semibold">
-              {editMaterialId ? 'Edit' : 'Add Material'}
+              {targetEditId ? 'Edit' : 'Add Material'}
             </span>
           </div>
 

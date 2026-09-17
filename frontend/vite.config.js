@@ -4,6 +4,9 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  optimizeDeps: {
+    include: ['react-router-dom', 'lucide-react', 'sweetalert2']
+  },
   build: {
     outDir: 'dist',
   },
@@ -17,4 +20,5 @@ export default defineConfig({
     }
   }
 })
+
 

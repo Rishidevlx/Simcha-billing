@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Boxes,
   Search,
@@ -25,7 +26,25 @@ import Swal from 'sweetalert2'
 import { API_ENDPOINTS } from '../config/api'
 import ListKpiCard from '../components/common/ListKpiCard'
 
-export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
+export default function AllMaterialsPage({ setActiveRoute: setActiveRouteProp, onEditMaterial }) {
+  const navigate = useNavigate()
+
+  const handleAddMaterial = () => {
+    if (setActiveRouteProp) {
+      setActiveRouteProp('add-material')
+    } else {
+      navigate('/materials/add')
+    }
+  }
+
+  const handleEdit = (id) => {
+    if (onEditMaterial) {
+      onEditMaterial(id)
+    } else {
+      navigate(`/materials/add?id=${id}`, { state: { editMaterialId: id } })
+    }
+  }
+
   const [materials, setMaterials] = useState([])
   const [categories, setCategories] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -294,7 +313,7 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setActiveRoute('add-material')}
+            onClick={handleAddMaterial}
             className="px-4 py-2 text-xs font-bold text-white bg-[#043486] hover:bg-[#0248BC] dark:bg-blue-600 dark:hover:bg-blue-500 border border-[#043486] dark:border-blue-600 rounded-sm shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Plus size={15} />
@@ -628,12 +647,13 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
                       <td className="py-3.5 px-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => onEditMaterial(mat.id)}
+                            onClick={() => handleEdit(mat.id)}
                             title="Edit Material"
                             className="p-1.5 rounded-sm text-blue-600 dark:text-blue-400 hover:text-white hover:bg-[#043486] dark:hover:bg-blue-600 border border-blue-200 dark:border-blue-800/60 transition-colors cursor-pointer"
                           >
                             <Edit2 size={13} />
                           </button>
+
 
                           <button
                             onClick={() => handleDelete(mat.id, mat.name)}

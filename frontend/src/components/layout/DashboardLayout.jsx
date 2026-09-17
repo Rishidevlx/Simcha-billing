@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react'
-
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Navbar from './Navbar'
 
 export default function DashboardLayout({
-  activeRoute,
-  setActiveRoute,
   onLogout,
   user,
+  onUpdateUser,
   children
 }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
@@ -15,6 +14,36 @@ export default function DashboardLayout({
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('simcha_theme') === 'dark' || document.documentElement.classList.contains('dark')
   })
+
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  const ROUTE_MAP = {
+    'dashboard': '/dashboard',
+    'inward': '/inward',
+    'inward-reports': '/inward-list',
+    'inward-list': '/inward-list',
+    'create-bill': '/outward',
+    'outward': '/outward',
+    'all-bills': '/outward-list',
+    'outward-list': '/outward-list',
+    'bills': '/outward-list',
+    'categories': '/categories',
+    'materials': '/materials',
+    'all-materials': '/materials',
+    'add-material': '/materials/add',
+    'inventory': '/inventory',
+    'stock': '/inventory',
+    'profile-settings': '/settings/profile',
+    'profile': '/settings/profile',
+    'system-settings': '/settings/system',
+    'configurations-settings': '/settings/configurations'
+  }
+
+  const setActiveRoute = (route) => {
+    const target = ROUTE_MAP[route] || (route && route.startsWith('/') ? route : `/${route || 'dashboard'}`)
+    navigate(target)
+  }
 
   useEffect(() => {
     if (isDarkMode) {
@@ -43,7 +72,7 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <Sidebar
         isCollapsed={isSidebarCollapsed}
-        activeRoute={activeRoute}
+        activePath={location.pathname}
         setActiveRoute={setActiveRoute}
         isMobileOpen={isMobileOpen}
         closeMobileSidebar={() => setIsMobileOpen(false)}
@@ -66,12 +95,9 @@ export default function DashboardLayout({
           setActiveRoute={setActiveRoute}
         />
 
-
-
-
         {/* Dynamic Page Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-          {children}
+          {children || <Outlet context={{ setActiveRoute, user, onUpdateUser }} />}
         </main>
 
         {/* Velzon-style Footer */}
@@ -93,3 +119,4 @@ export default function DashboardLayout({
     </div>
   )
 }
+

@@ -18,6 +18,7 @@ export const API_ENDPOINTS = {
   EMAIL_SEND_BILL: (billId) => `${API_BASE_URL}/api/email-config/send-bill/${billId}`,
   BILLS: `${API_BASE_URL}/api/bills`,
   BILL_BY_ID: (id) => `${API_BASE_URL}/api/bills/${id}`,
+  BILL_PAYMENT_UPDATE: (id) => `${API_BASE_URL}/api/bills/${id}/payment`,
   NEXT_INVOICE_NUMBER: `${API_BASE_URL}/api/bills/meta/next-number`,
   INWARDS: `${API_BASE_URL}/api/inwards`,
   INWARD_BY_ID: (id) => `${API_BASE_URL}/api/inwards/${id}`,
@@ -26,6 +27,12 @@ export const API_ENDPOINTS = {
   CLOUDINARY_TEST: `${API_BASE_URL}/api/cloudinary/test`,
   CLOUDINARY_UPLOAD: `${API_BASE_URL}/api/cloudinary/upload`,
   VERIFY_SERIAL: (serial) => `${API_BASE_URL}/api/materials/verify-serial/${encodeURIComponent(serial)}`,
+  INVENTORY: `${API_BASE_URL}/api/inventory`,
+  INVENTORY_LEDGER: `${API_BASE_URL}/api/inventory/ledger`,
+  INVENTORY_ADJUST: `${API_BASE_URL}/api/inventory/adjust`,
+  INVENTORY_REORDER_LEVEL: `${API_BASE_URL}/api/inventory/reorder-level`,
+  INVENTORY_UPDATE_STOCK_THRESHOLD: `${API_BASE_URL}/api/inventory/update-stock-threshold`,
+  INVENTORY_MATERIAL_SERIALS: (id, status) => `${API_BASE_URL}/api/inventory/serials/${id}${status ? `?status=${status}` : ''}`,
   HEALTH: `${API_BASE_URL}/api/health`
 }
 

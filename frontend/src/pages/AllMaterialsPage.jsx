@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Boxes,
   Search,
@@ -9,6 +9,9 @@ import {
   Tag,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
+  Layers,
+  PackageOpen,
   CheckSquare,
   Square,
   XCircle,
@@ -20,6 +23,7 @@ import {
 } from 'lucide-react'
 import Swal from 'sweetalert2'
 import { API_ENDPOINTS } from '../config/api'
+import ListKpiCard from '../components/common/ListKpiCard'
 
 export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
   const [materials, setMaterials] = useState([])
@@ -28,6 +32,7 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('')
+  const [selectedUnit, setSelectedUnit] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
 
@@ -86,7 +91,12 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
   // Reset to first page when search or filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchTerm, selectedCategory, selectedStatus, pageSize])
+  }, [searchTerm, selectedCategory, selectedStatus, selectedUnit, pageSize])
+
+  // Compute available unique units from materials
+  const availableUnits = useMemo(() => {
+    return Array.from(new Set(materials.map(m => m.unit).filter(Boolean)))
+  }, [materials])
 
   // Filter materials (excluding items currently in pending delete)
   const pendingIds = pendingDelete ? pendingDelete.ids : []
@@ -102,8 +112,9 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
 
     const matchesCategory = selectedCategory ? String(m.category_id) === String(selectedCategory) : true
     const matchesStatus = selectedStatus ? m.status === selectedStatus : true
+    const matchesUnit = selectedUnit ? m.unit === selectedUnit : true
 
-    return matchesSearch && matchesCategory && matchesStatus
+    return matchesSearch && matchesCategory && matchesStatus && matchesUnit
   })
 
   // Pagination calculations
@@ -292,6 +303,28 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
         </div>
       </div>
 
+      {/* 3 KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <ListKpiCard
+          label="Total Materials"
+          value={materials.length}
+          icon={Boxes}
+          variant="blueValue"
+        />
+        <ListKpiCard
+          label="Total Stock Units"
+          value={materials.reduce((acc, m) => acc + (parseInt(m.opening_stock, 10) || 0), 0).toLocaleString('en-IN')}
+          icon={Layers}
+          variant="emerald"
+        />
+        <ListKpiCard
+          label="Low Stock Items"
+          value={materials.filter(m => (parseInt(m.opening_stock, 10) || 0) <= (parseInt(m.reorder_level, 10) || 0)).length}
+          icon={AlertTriangle}
+          variant="amber"
+        />
+      </div>
+
       {/* 3-Second Undo Floating Toast Banner */}
       {pendingDelete && (
         <div className="bg-slate-900 dark:bg-slate-950 text-white px-4 py-3 rounded-sm shadow-xl flex items-center justify-between gap-4 border border-slate-700 animate-in slide-in-from-top-3 duration-200">
@@ -365,8 +398,8 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
             />
           </div>
 
-          {/* Category & Status Filters */}
-          <div className="flex items-center gap-2.5">
+          {/* Category, Unit & Status Filters */}
+          <div className="flex items-center gap-2.5 flex-wrap">
             {/* Category Filter */}
             <select
               value={selectedCategory}
@@ -376,6 +409,18 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
               <option value="">All Categories</option>
               {categories.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+
+            {/* Unit Filter */}
+            <select
+              value={selectedUnit}
+              onChange={(e) => setSelectedUnit(e.target.value)}
+              className="px-3 py-2 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-sm focus:outline-none focus:border-[#0248BC] dark:focus:border-blue-500 cursor-pointer"
+            >
+              <option value="">All Units</option>
+              {availableUnits.map(u => (
+                <option key={u} value={u}>{u}</option>
               ))}
             </select>
 
@@ -417,11 +462,13 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
                   />
                 </th>
                 <th className="py-3 px-3.5 w-14">S.No</th>
-                <th className="py-3 px-3.5">Material &amp; Code</th>
+                <th className="py-3 px-3.5">Material Name</th>
                 <th className="py-3 px-3.5">Category</th>
+                <th className="py-3 px-3.5">HSN Code</th>
                 <th className="py-3 px-3.5">Brand &amp; Unit</th>
                 <th className="py-3 px-3.5 text-right">Selling Price</th>
                 <th className="py-3 px-3.5 text-center">Stock</th>
+                <th className="py-3 px-3.5">Last Edited</th>
                 <th className="py-3 px-3.5 text-center">Status</th>
                 <th className="py-3 px-3.5 text-right w-24">Actions</th>
               </tr>
@@ -455,6 +502,9 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
                     <td className="py-3.5 px-3.5 text-center">
                       <div className="h-5 bg-gray-200 dark:bg-slate-700/80 rounded-xs w-16 mx-auto" />
                     </td>
+                    <td className="py-3.5 px-3.5">
+                      <div className="h-4 bg-gray-200 dark:bg-slate-700/80 rounded-xs w-20" />
+                    </td>
                     <td className="py-3.5 px-3.5 text-center">
                       <div className="h-5 bg-gray-200 dark:bg-slate-700/80 rounded-xs w-14 mx-auto" />
                     </td>
@@ -468,7 +518,7 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
                 ))
               ) : paginatedMaterials.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-gray-400 dark:text-slate-500">
+                  <td colSpan={10} className="text-center py-12 text-gray-400 dark:text-slate-500">
                     <Boxes size={32} className="mx-auto text-gray-300 dark:text-slate-600 mb-2" />
                     <p className="font-semibold text-gray-600 dark:text-slate-400">No materials found.</p>
                     <p className="text-[11px] text-gray-400 mt-0.5">Click "Add New Material" to create your first item.</p>
@@ -502,24 +552,24 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
                         {rowNumber}
                       </td>
 
-                      {/* Material Name & Code */}
+                      {/* Material Name */}
                       <td className="py-3.5 px-3.5">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-[#292424] dark:text-white text-xs sm:text-sm">
-                            {mat.name}
-                          </span>
-                          {mat.code && (
-                            <span className="text-[11px] text-gray-400 dark:text-slate-400 font-mono">
-                              SKU: {mat.code}
-                            </span>
-                          )}
-                        </div>
+                        <span className="font-bold text-[#292424] dark:text-white text-xs sm:text-sm">
+                          {mat.name}
+                        </span>
                       </td>
 
                       {/* Category */}
                       <td className="py-3.5 px-3.5">
                         <span className="px-2 py-0.5 rounded-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[11px] font-medium">
                           {mat.category_name || 'Uncategorized'}
+                        </span>
+                      </td>
+
+                      {/* HSN Code */}
+                      <td className="py-3.5 px-3.5">
+                        <span className="font-mono text-xs font-semibold text-gray-700 dark:text-slate-300">
+                          {mat.hsn_code || '—'}
                         </span>
                       </td>
 
@@ -548,6 +598,17 @@ export default function AllMaterialsPage({ setActiveRoute, onEditMaterial }) {
                         }`}>
                           {mat.opening_stock || 0} {mat.unit}
                         </span>
+                      </td>
+
+                      {/* Last Edited Date */}
+                      <td className="py-3.5 px-3.5 whitespace-nowrap text-gray-700 dark:text-slate-300 font-medium text-xs">
+                        {mat.updated_at || mat.created_at
+                          ? new Date(mat.updated_at || mat.created_at).toLocaleDateString('en-GB', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            })
+                          : '—'}
                       </td>
 
                       {/* Status */}

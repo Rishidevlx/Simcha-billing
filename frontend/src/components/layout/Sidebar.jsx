@@ -4,6 +4,7 @@ import {
   Receipt,
   Layers,
   Boxes,
+  PackageOpen,
   Settings,
   ChevronDown,
   ChevronRight,
@@ -81,6 +82,12 @@ export default function Sidebar({
         { id: 'add-material', title: 'Add Material' },
         { id: 'all-materials', title: 'All Materials' }
       ]
+    },
+    {
+      id: 'inventory',
+      title: 'Stock & Inventory',
+      icon: PackageOpen,
+      single: true
     },
     {
       id: 'settings',

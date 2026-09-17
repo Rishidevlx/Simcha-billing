@@ -216,6 +216,82 @@ export default function AllBillsPage({ setActiveRoute }) {
     }
   }
 
+  // Inline change Payment Type
+  const handleUpdatePaymentType = async (billId, newType) => {
+    try {
+      const res = await fetch(API_ENDPOINTS.BILL_PAYMENT_UPDATE(billId), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_mode: newType })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setBills(prev => prev.map(b => b.id === billId ? { ...b, payment_mode: newType } : b))
+        Swal.mixin({
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 2000,
+          timerProgressBar: true
+        }).fire({
+          icon: 'success',
+          title: `Payment type updated to ${newType}`
+        })
+      } else {
+        throw new Error(data.message || 'Failed to update payment type')
+      }
+    } catch (err) {
+      console.error('Error updating payment type:', err)
+      Swal.fire({
+        icon: 'error',
+        title: 'Update Failed',
+        text: err.message || 'Could not update payment type.',
+        confirmButtonColor: '#043486'
+      })
+    }
+  }
+
+  // Inline change Payment Status
+  const handleUpdatePaymentStatus = async (billId, newStatus) => {
+    try {
+      const res = await fetch(API_ENDPOINTS.BILL_PAYMENT_UPDATE(billId), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_status: newStatus })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setBills(prev => {
+          const updated = prev.map(b => b.id === billId ? { ...b, payment_status: newStatus } : b)
+          const paidCount = updated.filter(b => b.payment_status === 'Paid').length
+          const pendingCount = updated.filter(b => b.payment_status === 'Pending').length
+          setStats(s => ({ ...s, paidCount, pendingCount }))
+          return updated
+        })
+        Swal.mixin({
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 2000,
+          timerProgressBar: true
+        }).fire({
+          icon: 'success',
+          title: `Payment status updated to ${newStatus}`
+        })
+      } else {
+        throw new Error(data.message || 'Failed to update status')
+      }
+    } catch (err) {
+      console.error('Error updating payment status:', err)
+      Swal.fire({
+        icon: 'error',
+        title: 'Update Failed',
+        text: err.message || 'Could not update status.',
+        confirmButtonColor: '#043486'
+      })
+    }
+  }
+
   // Filter Logic
   const filteredBills = useMemo(() => {
     return bills.filter(bill => {
@@ -583,7 +659,8 @@ export default function AllBillsPage({ setActiveRoute }) {
                   <th className="py-3 px-4">Mobile Number</th>
                   <th className="py-3 px-4 text-center">Items</th>
                   <th className="py-3 px-4 text-right">Total Amount</th>
-                  <th className="py-3 px-4 text-center">Payment</th>
+                  <th className="py-3 px-3 text-center">Payment Type</th>
+                  <th className="py-3 px-3 text-center">Status</th>
                   <th className="py-3 px-4 text-center">Actions</th>
                 </tr>
               </thead>
@@ -609,18 +686,7 @@ export default function AllBillsPage({ setActiveRoute }) {
 
                       {/* Invoice # */}
                       <td className="py-3.5 px-4 font-mono font-bold text-[#043486] dark:text-blue-400">
-                        <div className="flex items-center gap-2">
-                          <span>{bill.invoice_number}</span>
-                          <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded-none font-sans font-semibold ${
-                              bill.invoice_type === 'GST'
-                                ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
-                                : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700'
-                            }`}
-                          >
-                            {bill.invoice_type === 'GST' ? 'GST' : 'NON-GST'}
-                          </span>
-                        </div>
+                        <span>{bill.invoice_number}</span>
                       </td>
 
                       {/* Date */}
@@ -656,24 +722,38 @@ export default function AllBillsPage({ setActiveRoute }) {
                         ₹ {parseFloat(bill.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
 
-                      {/* Payment Status & Mode */}
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span
-                            className={`px-2 py-0.5 text-[10px] font-bold uppercase ${
-                              bill.payment_status === 'Paid'
-                                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                                : bill.payment_status === 'Partial'
-                                ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
-                                : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
-                            }`}
-                          >
-                            {bill.payment_status}
-                          </span>
-                          <span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">
-                            {bill.payment_mode}
-                          </span>
-                        </div>
+                      {/* Payment Type Dropdown */}
+                      <td className="py-3.5 px-3 text-center">
+                        <select
+                          value={bill.payment_mode || 'Cash'}
+                          onChange={(e) => handleUpdatePaymentType(bill.id, e.target.value)}
+                          className="px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] cursor-pointer hover:border-gray-400 transition-colors"
+                        >
+                          <option value="Cash">Cash</option>
+                          <option value="UPI">UPI</option>
+                          <option value="Online / Net Banking">Online / Net Banking</option>
+                          <option value="Cheque">Cheque</option>
+                          <option value="Credit">Credit</option>
+                        </select>
+                      </td>
+
+                      {/* Status Dropdown */}
+                      <td className="py-3.5 px-3 text-center">
+                        <select
+                          value={bill.payment_status || 'Paid'}
+                          onChange={(e) => handleUpdatePaymentStatus(bill.id, e.target.value)}
+                          className={`px-2.5 py-1.5 text-[11px] font-bold uppercase rounded-none border focus:outline-none cursor-pointer transition-colors ${
+                            bill.payment_status === 'Paid'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
+                              : bill.payment_status === 'Partial'
+                              ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800'
+                              : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-400 border-red-300 dark:border-red-800'
+                          }`}
+                        >
+                          <option value="Paid">Paid</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Partial">Partial</option>
+                        </select>
                       </td>
 
                       {/* Actions */}

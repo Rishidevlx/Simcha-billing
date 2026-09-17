@@ -224,6 +224,14 @@ export async function initDatabase() {
         } catch {
           // Column already exists
         }
+
+        // Ensure payment_mode and payment_status support flexible strings and default to Pending
+        try {
+          await pool.query(`ALTER TABLE bills MODIFY COLUMN payment_mode VARCHAR(100) DEFAULT 'Cash';`)
+          await pool.query(`ALTER TABLE bills MODIFY COLUMN payment_status VARCHAR(100) DEFAULT 'Pending';`)
+        } catch (alterErr) {
+          console.error('Error updating bills payment column definitions:', alterErr.message)
+        }
         console.log('✅ "bills" table ready.')
 
         // Step 12: Create Bill Items table if not exists
@@ -443,7 +451,43 @@ export async function initDatabase() {
           `)
           console.log('✨ Seeded default Cloudinary configurations.')
         }
-        console.log('✅ "cloudinary_configs" table ready.')
+        // Step 18: Ensure current_stock column exists in materials and create stock_ledger table
+        try {
+          await pool.query(`ALTER TABLE materials ADD COLUMN current_stock INT DEFAULT 0 AFTER opening_stock;`)
+        } catch {}
+        try {
+          await pool.query(`UPDATE materials SET current_stock = opening_stock WHERE current_stock = 0 AND opening_stock > 0;`)
+        } catch {}
+
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS stock_ledger (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            material_id INT NOT NULL,
+            movement_type ENUM('INITIAL_STOCK', 'INWARD_PURCHASE', 'OUTWARD_SALE', 'MANUAL_ADJUSTMENT', 'DAMAGE_LOSS', 'RETURN', 'INWARD_REVERSAL', 'OUTWARD_REVERSAL') NOT NULL,
+            reference_number VARCHAR(100) NULL,
+            quantity_change DECIMAL(10, 2) NOT NULL,
+            balance_stock DECIMAL(10, 2) NOT NULL,
+            notes VARCHAR(255) NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+        console.log('✅ "stock_ledger" table ready.')
+
+        // Step 19: Create inventory_serials table if not exists
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS inventory_serials (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            material_id INT NOT NULL,
+            serial_number VARCHAR(191) NOT NULL,
+            status ENUM('Available', 'Sold', 'Damaged', 'Returned') NOT NULL DEFAULT 'Available',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_mat_serial (material_id, serial_number),
+            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+        console.log('✅ "inventory_serials" table ready.')
 
         return pool
       } catch (error) {

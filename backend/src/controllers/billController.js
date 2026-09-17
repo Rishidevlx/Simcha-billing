@@ -73,7 +73,7 @@ export async function createBill(req, res) {
       total_amount = 0,
       amount_in_words = '',
       payment_mode = 'Cash',
-      payment_status = 'Paid',
+      payment_status = 'Pending',
       notes = '',
       items = []
     } = req.body
@@ -169,6 +169,67 @@ export async function createBill(req, res) {
         parseFloat(item.tax_amount) || 0,
         parseFloat(item.amount) || 0
       ])
+
+      // Deduct Materials current_stock (-) and record in stock_ledger
+      const materialId = item.material_id ? parseInt(item.material_id, 10) : null
+      if (materialId) {
+        try {
+          const qtyVal = parseFloat(item.quantity) || 1
+          const [matRows] = await pool.query('SELECT current_stock, opening_stock FROM materials WHERE id = ?', [materialId])
+          if (matRows.length > 0) {
+            const currentStock = parseFloat(matRows[0].current_stock ?? matRows[0].opening_stock ?? 0)
+            const newStock = Math.max(0, currentStock - qtyVal)
+
+            await pool.query('UPDATE materials SET current_stock = ?, updated_at = NOW() WHERE id = ?', [newStock, materialId])
+
+            await pool.query(`
+              INSERT INTO stock_ledger (
+                material_id, movement_type, reference_number,
+                quantity_change, balance_stock, notes
+              ) VALUES (?, 'OUTWARD_SALE', ?, ?, ?, ?)
+            `, [
+              materialId,
+              invoice_number.trim(),
+              -qtyVal,
+              newStock,
+              `Outward Sale #${invoice_number.trim()} (${customer_name.trim()})`
+            ])
+          }
+        } catch (stockErr) {
+          console.error('Error updating stock on outward bill:', stockErr)
+        }
+      }
+
+      // Update Serial Numbers status to 'Sold' in inventory_serials
+      const billedSerials = []
+      if (Array.isArray(item.serial_numbers)) {
+        item.serial_numbers.forEach(s => {
+          if (s && String(s).trim()) billedSerials.push(String(s).trim())
+        })
+      } else if (item.serial_number && String(item.serial_number).trim()) {
+        String(item.serial_number).split(',').forEach(s => {
+          if (s && s.trim()) billedSerials.push(s.trim())
+        })
+      }
+
+      if (materialId && billedSerials.length > 0) {
+        for (const sn of billedSerials) {
+          try {
+            const [updateRes] = await pool.query(
+              'UPDATE inventory_serials SET status = "Sold", updated_at = NOW() WHERE material_id = ? AND LOWER(serial_number) = LOWER(?)',
+              [materialId, sn]
+            )
+            if (updateRes.affectedRows === 0) {
+              await pool.query(
+                'INSERT INTO inventory_serials (material_id, serial_number, status) VALUES (?, ?, "Sold") ON DUPLICATE KEY UPDATE status = "Sold", updated_at = NOW()',
+                [materialId, sn]
+              )
+            }
+          } catch (serialErr) {
+            console.error('Error updating inventory serial to Sold:', serialErr)
+          }
+        }
+      }
     }
 
     // Trigger Automated Email Dispatch in Background if configured
@@ -296,7 +357,92 @@ export async function deleteBill(req, res) {
     const { id } = req.params
     const pool = getPool()
 
-    const [result] = await pool.query('DELETE FROM bills WHERE id = ?', [id])
+    const [existing] = await pool.query('SELECT id, invoice_number FROM bills WHERE id = ?', [id])
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bill not found.'
+      })
+    }
+
+    const invoiceNo = existing[0].invoice_number
+
+    // 1. Restore stock for all items
+    const [items] = await pool.query('SELECT material_id, quantity FROM bill_items WHERE bill_id = ?', [id])
+    for (const item of items) {
+      if (item.material_id) {
+        try {
+          const qtyVal = parseFloat(item.quantity) || 1
+          const [matRows] = await pool.query('SELECT current_stock, opening_stock FROM materials WHERE id = ?', [item.material_id])
+          if (matRows.length > 0) {
+            const currentStock = parseFloat(matRows[0].current_stock ?? matRows[0].opening_stock ?? 0)
+            const newStock = currentStock + qtyVal
+
+            await pool.query('UPDATE materials SET current_stock = ?, updated_at = NOW() WHERE id = ?', [newStock, item.material_id])
+
+            await pool.query(`
+              INSERT INTO stock_ledger (
+                material_id, movement_type, reference_number,
+                quantity_change, balance_stock, notes
+              ) VALUES (?, 'OUTWARD_REVERSAL', ?, ?, ?, ?)
+            `, [
+              item.material_id,
+              invoiceNo,
+              qtyVal,
+              newStock,
+              `Deleted Invoice #${invoiceNo}`
+            ])
+          }
+        } catch (restoreErr) {
+          console.error('Error restoring stock on bill delete:', restoreErr)
+        }
+      }
+    }
+
+    // 2. Delete bill (cascades items)
+    await pool.query('DELETE FROM bills WHERE id = ?', [id])
+
+    return res.status(200).json({
+      success: true,
+      message: `Bill #${invoiceNo} deleted successfully.`
+    })
+  } catch (error) {
+    console.error('Error deleting bill:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete bill.'
+    })
+  }
+}
+
+// Update Bill Payment Mode and/or Status
+export async function updateBillPayment(req, res) {
+  try {
+    const { id } = req.params
+    const { payment_mode, payment_status } = req.body
+    const pool = getPool()
+
+    const fields = []
+    const values = []
+
+    if (payment_mode !== undefined) {
+      fields.push('payment_mode = ?')
+      values.push(payment_mode)
+    }
+    if (payment_status !== undefined) {
+      fields.push('payment_status = ?')
+      values.push(payment_status)
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No payment fields provided for update.'
+      })
+    }
+
+    values.push(id)
+    const [result] = await pool.query(`UPDATE bills SET ${fields.join(', ')} WHERE id = ?`, values)
 
     if (result.affectedRows === 0) {
       return res.status(404).json({
@@ -307,13 +453,14 @@ export async function deleteBill(req, res) {
 
     return res.status(200).json({
       success: true,
-      message: 'Bill deleted successfully.'
+      message: 'Payment information updated successfully.'
     })
   } catch (error) {
-    console.error('Error deleting bill:', error)
+    console.error('Error updating bill payment:', error)
     return res.status(500).json({
       success: false,
-      message: 'Failed to delete bill.'
+      message: 'Failed to update payment information.'
     })
   }
 }
+

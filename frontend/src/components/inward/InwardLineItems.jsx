@@ -162,9 +162,9 @@ export default function InwardLineItems({
 
               {/* Row 2: Description + Serial Number Toggle + Dynamic 3-Column Serial Inputs */}
               <div className="pt-3 border-t border-gray-200 dark:border-slate-800 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div>
                   {/* Description / Notes */}
-                  <div className="flex-1">
+                  <div>
                     <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">
                       Description / Notes <span className="text-gray-400 text-[10px] font-normal">(Optional)</span>
                     </label>
@@ -175,21 +175,6 @@ export default function InwardLineItems({
                       placeholder="Notes (optional)"
                       className="w-full px-3 py-2 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500"
                     />
-                  </div>
-
-                  {/* Enable Serial Number Checkbox */}
-                  <div className="sm:self-end pb-0.5">
-                    <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 px-3 py-2 rounded-none hover:border-[#043486] transition-colors select-none">
-                      <input
-                        type="checkbox"
-                        checked={item.has_serial || false}
-                        onChange={() => onToggleSerial(index)}
-                        className="w-4 h-4 text-[#043486] rounded-none focus:ring-0 cursor-pointer"
-                      />
-                      <span className="text-xs font-semibold text-[#043486] dark:text-blue-400">
-                        Has Serial Numbers ({qtyCount})
-                      </span>
-                    </label>
                   </div>
                 </div>
 

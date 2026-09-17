@@ -197,7 +197,8 @@ export const updateMaterial = async (req, res) => {
         barcode = ?,
         warranty = ?,
         serial_tracking = ?,
-        status = ?
+        status = ?,
+        updated_at = NOW()
       WHERE id = ?
     `, [
       name.trim(),

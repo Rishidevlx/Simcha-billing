@@ -29,7 +29,7 @@ body {
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 
+  box-shadow:
     0 20px 50px -10px rgba(4, 52, 134, 0.08),
     0 10px 25px -5px rgba(0, 0, 0, 0.04),
     inset 0 1px 2px 0 rgba(255, 255, 255, 1);
@@ -54,15 +54,19 @@ body {
   0% {
     transform: translateY(0px) rotate(0deg);
   }
+
   25% {
     transform: translateY(-10px) rotate(0.6deg);
   }
+
   50% {
     transform: translateY(-18px) rotate(0deg);
   }
+
   75% {
     transform: translateY(-8px) rotate(-0.6deg);
   }
+
   100% {
     transform: translateY(0px) rotate(0deg);
   }
@@ -85,9 +89,10 @@ body {
     margin: 0;
   }
 
-  html, body {
+  html,
+  body {
     width: 210mm !important;
-    min-height: 297mm !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
@@ -95,38 +100,57 @@ body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  
+
   /* Hide all app chrome, navigation, forms, sidebars */
   #root,
   .swal2-container {
     display: none !important;
   }
-  
+
   /* Show ONLY the printable invoice wrapper */
   #invoice-print-wrapper {
     display: block !important;
     position: static !important;
     width: 210mm !important;
-    min-height: 297mm !important;
     margin: 0 auto !important;
     padding: 0 !important;
     background: #ffffff !important;
   }
 
   #invoice-printable-area {
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
+    display: block !important;
     width: 210mm !important;
-    min-height: 297mm !important;
     margin: 0 auto !important;
-    padding: 8mm 12mm !important;
+    padding: 0 !important;
     box-sizing: border-box !important;
     background: #ffffff !important;
     box-shadow: none !important;
     border: none !important;
   }
+
+  .invoice-page {
+    width: 210mm !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    page-break-after: always;
+    break-after: page;
+    position: relative !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+  }
+
+  .invoice-page:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
 }
+
 
 /* Custom Sleek & Slim Sidebar Scrollbar */
 .sidebar-scrollbar::-webkit-scrollbar {

@@ -9,6 +9,7 @@ import settingsRoutes from '../backend/src/routes/settingsRoutes.js'
 import billRoutes from '../backend/src/routes/billRoutes.js'
 import inwardRoutes from '../backend/src/routes/inwardRoutes.js'
 import cloudinaryRoutes from '../backend/src/routes/cloudinaryRoutes.js'
+import inventoryRoutes from '../backend/src/routes/inventoryRoutes.js'
 
 dotenv.config()
 
@@ -50,6 +51,7 @@ app.use('/api/settings', settingsRoutes)
 app.use('/api/bills', billRoutes)
 app.use('/api/inwards', inwardRoutes)
 app.use('/api/cloudinary', cloudinaryRoutes)
+app.use('/api/inventory', inventoryRoutes)
 
 
 // Error Handler

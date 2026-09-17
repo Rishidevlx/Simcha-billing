@@ -340,7 +340,7 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
             <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               
               {/* Material Name* */}
-              <div className="lg:col-span-3">
+              <div className="lg:col-span-2">
                 <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
                   Material Name <span className="text-red-500">*</span>
                 </label>
@@ -353,6 +353,52 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
                   placeholder="e.g. Cotton Fabric Rolls 100m, Steel Screws"
                   className="w-full px-3.5 py-2.5 text-xs sm:text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-sm focus:outline-none focus:border-[#0248BC] dark:focus:border-blue-500 focus:ring-1 focus:ring-[#0248BC] dark:focus:ring-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500"
                 />
+              </div>
+
+              {/* Status Radio Box */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
+                  Status <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label
+                    className={`flex items-center justify-center gap-1.5 py-2 px-2.5 border rounded-sm text-xs font-semibold cursor-pointer transition-colors ${
+                      formData.status === 'Active'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold'
+                        : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="status"
+                      value="Active"
+                      checked={formData.status === 'Active'}
+                      onChange={() => setFormData(p => ({ ...p, status: 'Active' }))}
+                      className="sr-only"
+                    />
+                    <span className={`w-2 h-2 rounded-full ${formData.status === 'Active' ? 'bg-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900' : 'bg-gray-300 dark:bg-slate-600'}`} />
+                    Active
+                  </label>
+
+                  <label
+                    className={`flex items-center justify-center gap-1.5 py-2 px-2.5 border rounded-sm text-xs font-semibold cursor-pointer transition-colors ${
+                      formData.status === 'Inactive'
+                        ? 'border-gray-500 dark:border-slate-500 bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-200 font-bold'
+                        : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="status"
+                      value="Inactive"
+                      checked={formData.status === 'Inactive'}
+                      onChange={() => setFormData(p => ({ ...p, status: 'Inactive' }))}
+                      className="sr-only"
+                    />
+                    <span className={`w-2 h-2 rounded-full ${formData.status === 'Inactive' ? 'bg-gray-600 dark:bg-slate-400 ring-2 ring-gray-300 dark:ring-slate-700' : 'bg-gray-300 dark:bg-slate-600'}`} />
+                    Inactive
+                  </label>
+                </div>
               </div>
 
               {/* Category* (Direct Typeahead Dropdown) */}
@@ -415,6 +461,25 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
                   placeholder="Detailed material description, specifications, or internal notes..."
                   className="w-full px-3.5 py-2 text-xs sm:text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-sm focus:outline-none focus:border-[#0248BC] dark:focus:border-blue-500 focus:ring-1 focus:ring-[#0248BC] dark:focus:ring-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500"
                 />
+              </div>
+
+              {/* Serial Number Tracking Checkbox */}
+              <div className="lg:col-span-3 pt-1">
+                <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    name="serial_tracking"
+                    checked={Boolean(formData.serial_tracking)}
+                    onChange={(e) => setFormData(p => ({ ...p, serial_tracking: e.target.checked }))}
+                    className="w-4 h-4 text-[#043486] rounded-none focus:ring-0 cursor-pointer accent-[#043486]"
+                  />
+                  <span className="text-xs sm:text-sm font-semibold text-[#292424] dark:text-white">
+                    Enable Serial Number Tracking
+                  </span>
+                  <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                    (Enable unique Serial / IMEI number inputs during Inward purchase &amp; Outward billing)
+                  </span>
+                </label>
               </div>
 
             </div>
@@ -525,186 +590,6 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
                       }`}
                     />
                   </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Section 3: Stock */}
-          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-sm shadow-xs transition-colors">
-            <div className="px-5 py-3 border-b border-gray-200 dark:border-slate-800 bg-gray-50/70 dark:bg-slate-800/60 flex items-center gap-2">
-              <Package size={16} className="text-[#043486] dark:text-blue-400" />
-              <h2 className="text-xs sm:text-sm font-bold text-[#292424] dark:text-white uppercase tracking-wider">
-                Section 3 — Stock
-              </h2>
-            </div>
-
-            <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Opening Stock */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
-                  Opening Stock Quantity
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  name="opening_stock"
-                  value={formData.opening_stock}
-                  onKeyDown={blockNegativeKeys}
-                  onChange={handlePositiveNumberChange}
-                  placeholder="0"
-                  className="w-full px-3.5 py-2.5 text-xs sm:text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-sm focus:outline-none focus:border-[#0248BC] dark:focus:border-blue-500 focus:ring-1 focus:ring-[#0248BC] dark:focus:ring-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                />
-                <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1">Current available inventory units</p>
-              </div>
-
-              {/* Reorder Level */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
-                  Low Stock Reorder Level
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  name="reorder_level"
-                  value={formData.reorder_level}
-                  onKeyDown={blockNegativeKeys}
-                  onChange={handlePositiveNumberChange}
-                  placeholder="0"
-                  className="w-full px-3.5 py-2.5 text-xs sm:text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-sm focus:outline-none focus:border-[#0248BC] dark:focus:border-blue-500 focus:ring-1 focus:ring-[#0248BC] dark:focus:ring-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                />
-                <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1">Automatic alert when stock drops below this</p>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Section 4: Additional (Spacious 2-Column Grid Layout) */}
-          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-sm shadow-xs transition-colors">
-            <div className="px-5 py-3 border-b border-gray-200 dark:border-slate-800 bg-gray-50/70 dark:bg-slate-800/60 flex items-center gap-2">
-              <Sliders size={16} className="text-[#043486] dark:text-blue-400" />
-              <h2 className="text-xs sm:text-sm font-bold text-[#292424] dark:text-white uppercase tracking-wider">
-                Section 4 — Additional
-              </h2>
-            </div>
-
-            <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Barcode */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
-                  Barcode / EAN
-                </label>
-                <input
-                  type="text"
-                  name="barcode"
-                  value={formData.barcode}
-                  onChange={handleInputChange}
-                  placeholder="Scan or type barcode number"
-                  className="w-full px-3.5 py-2.5 text-xs sm:text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-sm focus:outline-none focus:border-[#0248BC] dark:focus:border-blue-500 focus:ring-1 focus:ring-[#0248BC] dark:focus:ring-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                />
-                <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1">Supports standard POS 1D/2D barcode scanners</p>
-              </div>
-
-              {/* Warranty Dropdown */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
-                  Warranty Period
-                </label>
-                <select
-                  name="warranty"
-                  value={formData.warranty}
-                  onChange={handleInputChange}
-                  className="w-full px-3.5 py-2.5 text-xs sm:text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-sm focus:outline-none focus:border-[#0248BC] dark:focus:border-blue-500 focus:ring-1 focus:ring-[#0248BC] dark:focus:ring-blue-500 cursor-pointer"
-                >
-                  {warrantyOptions.map(w => (
-                    <option key={w.value} value={w.value}>
-                      {w.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1">Printed on customer warranty slips and invoice</p>
-              </div>
-
-              {/* Serial Number Tracking (Sleek iOS/Velzon Toggle Switch) */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-2">
-                  Tracking Mode
-                </label>
-                <div className="p-3 bg-gray-50/70 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 rounded-sm flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-[#292424] dark:text-white">Serial Number Tracking</span>
-                    <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                      {formData.serial_tracking ? 'Track unique serial / IMEI per unit' : 'Standard batch quantity counting'}
-                    </span>
-                  </div>
-
-                  {/* Toggle Switch */}
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={formData.serial_tracking}
-                    onClick={() => setFormData(p => ({ ...p, serial_tracking: !p.serial_tracking }))}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out cursor-pointer focus:outline-none ${
-                      formData.serial_tracking 
-                        ? 'bg-[#0248BC] dark:bg-blue-600' 
-                        : 'bg-gray-300 dark:bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-200 ease-in-out ${
-                        formData.serial_tracking ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-
-              {/* Status Radio Box */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-2">
-                  Status <span className="text-red-500">*</span>
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <label
-                    className={`flex items-center justify-center gap-2 p-3 border rounded-sm text-xs font-semibold cursor-pointer transition-colors ${
-                      formData.status === 'Active'
-                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold'
-                        : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="status"
-                      value="Active"
-                      checked={formData.status === 'Active'}
-                      onChange={() => setFormData(p => ({ ...p, status: 'Active' }))}
-                      className="sr-only"
-                    />
-                    <span className={`w-2.5 h-2.5 rounded-full ${formData.status === 'Active' ? 'bg-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900' : 'bg-gray-300 dark:bg-slate-600'}`} />
-                    Active
-                  </label>
-
-                  <label
-                    className={`flex items-center justify-center gap-2 p-3 border rounded-sm text-xs font-semibold cursor-pointer transition-colors ${
-                      formData.status === 'Inactive'
-                        ? 'border-gray-500 dark:border-slate-500 bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-200 font-bold'
-                        : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="status"
-                      value="Inactive"
-                      checked={formData.status === 'Inactive'}
-                      onChange={() => setFormData(p => ({ ...p, status: 'Inactive' }))}
-                      className="sr-only"
-                    />
-                    <span className={`w-2.5 h-2.5 rounded-full ${formData.status === 'Inactive' ? 'bg-gray-600 dark:bg-slate-400 ring-2 ring-gray-300 dark:ring-slate-700' : 'bg-gray-300 dark:bg-slate-600'}`} />
-                    Inactive
-                  </label>
                 </div>
               </div>
 

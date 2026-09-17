@@ -24,6 +24,7 @@ import InwardReportsPage from './InwardReportsPage'
 import AllBillsPage from './AllBillsPage'
 import SystemSettingsPage from './SystemSettingsPage'
 import ConfigurationsSettingsPage from './ConfigurationsSettingsPage'
+import InventoryPage from './InventoryPage'
 import InvoiceModal from '../components/invoice/InvoiceModal'
 import { API_ENDPOINTS } from '../config/api'
 
@@ -170,6 +171,10 @@ export default function DashboardPage({ activeRoute, setActiveRoute, user, onUpd
         }}
       />
     )
+  }
+
+  if (activeRoute === 'inventory' || activeRoute === 'stock') {
+    return <InventoryPage setActiveRoute={setActiveRoute} />
   }
 
   // Breadcrumb & Page Info mapper

@@ -222,6 +222,17 @@ export default function InwardBillPage({ setActiveRoute }) {
   const handleMaterialSelect = (index, materialId) => {
     const selectedMat = materials.find(m => String(m.id) === String(materialId))
 
+    if (selectedMat) {
+      // Check if item already selected in another row
+      const isDuplicate = items.some((it, i) => i !== index && String(it.material_id) === String(materialId))
+      if (isDuplicate) {
+        Toast.fire({
+          icon: 'warning',
+          title: `"${selectedMat.name}" is already added to inward list.`
+        })
+      }
+    }
+
     setItems(prev => {
       const updated = [...prev]
       if (selectedMat) {
@@ -488,13 +499,32 @@ export default function InwardBillPage({ setActiveRoute }) {
       return
     }
 
-    // 1. Check for Duplicate Serial Numbers
-    if (duplicateSerials.size > 0) {
-      const duplicateList = Array.from(duplicateSerials).join(', ')
+    // 1. Check for Duplicate Serial Numbers within form
+    const seenSerials = new Set()
+    const duplicates = new Set()
+
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      if (it.item_name && it.has_serial && Array.isArray(it.serial_numbers)) {
+        for (const sn of it.serial_numbers) {
+          const clean = String(sn || '').trim()
+          if (clean) {
+            const lower = clean.toLowerCase()
+            if (seenSerials.has(lower)) {
+              duplicates.add(clean)
+            }
+            seenSerials.add(lower)
+          }
+        }
+      }
+    }
+
+    if (duplicates.size > 0) {
+      const duplicateList = Array.from(duplicates).join(', ')
       Swal.fire({
         icon: 'error',
         title: 'Duplicate Serial Numbers',
-        text: `Each serial number must be unique. Duplicate found: "${duplicateList}"`,
+        text: `Each serial number must be unique. Duplicate found in bill: "${duplicateList}"`,
         confirmButtonColor: '#043486'
       })
       return
@@ -890,14 +920,14 @@ export default function InwardBillPage({ setActiveRoute }) {
 
             </div>
 
-            {/* 2. Upload Hardcopy / Purchase Bill (Client-side UI Option) */}
-            <div className="bg-white dark:bg-slate-900 rounded-none border border-gray-200 dark:border-slate-800 p-6 shadow-sm space-y-4 transition-colors">
-              <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-800">
-                <h2 className="text-sm font-bold text-[#043486] dark:text-blue-400 tracking-wide uppercase flex items-center gap-2">
-                  <UploadCloud size={16} />
+            {/* 2. Upload Hardcopy / Purchase Bill (Compact Sleek Dropzone) */}
+            <div className="bg-white dark:bg-slate-900 rounded-none border border-gray-200 dark:border-slate-800 p-4 shadow-sm space-y-2.5 transition-colors">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-slate-800">
+                <h2 className="text-xs font-bold text-[#043486] dark:text-blue-400 tracking-wide uppercase flex items-center gap-1.5">
+                  <UploadCloud size={14} />
                   <span>Hardcopy / Bill Document</span>
                 </h2>
-                <span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wider">Optional</span>
+                <span className="text-[9.5px] text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wider">Optional</span>
               </div>
 
               {!uploadedBill ? (
@@ -911,7 +941,7 @@ export default function InwardBillPage({ setActiveRoute }) {
                       handleFileUpload(e.dataTransfer.files[0])
                     }
                   }}
-                  className={`border-2 border-dashed p-5 text-center transition-all cursor-pointer ${
+                  className={`border-2 border-dashed py-3 px-3 text-center transition-all cursor-pointer ${
                     isDragging
                       ? 'border-[#043486] bg-blue-50/50 dark:bg-blue-950/30'
                       : isUploadingBill
@@ -931,60 +961,53 @@ export default function InwardBillPage({ setActiveRoute }) {
                       }
                     }}
                   />
-                  <div className="flex flex-col items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-2.5">
                     {isUploadingBill ? (
                       <>
-                        <div className="w-8 h-8 border-2 border-[#043486] border-t-transparent rounded-full animate-spin" />
-                        <p className="text-xs font-bold text-[#043486] dark:text-blue-400">Uploading to Cloudinary...</p>
+                        <div className="w-5 h-5 border-2 border-[#043486] border-t-transparent rounded-full animate-spin shrink-0" />
+                        <p className="text-xs font-bold text-[#043486] dark:text-blue-400">Uploading document...</p>
                       </>
                     ) : (
                       <>
-                        <div className="w-10 h-10 rounded-none bg-blue-50 dark:bg-blue-900/30 text-[#043486] dark:text-blue-400 flex items-center justify-center">
-                          <UploadCloud size={20} />
+                        <div className="w-7 h-7 rounded-none bg-blue-50 dark:bg-blue-900/30 text-[#043486] dark:text-blue-400 flex items-center justify-center shrink-0">
+                          <UploadCloud size={15} />
                         </div>
-                        <div>
+                        <div className="text-left">
                           <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">
-                            Upload Bill / Invoice Document
+                            Upload Bill / Invoice
                           </p>
-                          <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
-                            Drag &amp; drop or <span className="text-[#043486] dark:text-blue-400 font-bold underline">browse</span>
+                          <p className="text-[10px] text-gray-400 dark:text-slate-500">
+                            Click to browse (Image or PDF)
                           </p>
                         </div>
-                        <p className="text-[10px] text-gray-400 dark:text-slate-500">
-                          PDF, JPG, PNG up to 10MB
-                        </p>
                       </>
                     )}
                   </div>
                 </div>
               ) : (
-                <div className="p-3.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-none space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-9 h-9 shrink-0 bg-blue-100 dark:bg-blue-950/80 text-[#043486] dark:text-blue-400 flex items-center justify-center">
-                        <FileCheck size={18} />
+                <div className="p-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-none">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 shrink-0 bg-blue-100 dark:bg-blue-950/80 text-[#043486] dark:text-blue-400 flex items-center justify-center">
+                        <FileCheck size={14} />
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 truncate" title={uploadedBill.name}>
                           {uploadedBill.name}
                         </p>
-                        <p className="text-[10px] text-gray-500 dark:text-slate-400 font-mono">
-                          {(uploadedBill.size / (1024 * 1024)).toFixed(2)} MB • {uploadedBill.type.includes('pdf') ? 'PDF Document' : 'Image'}
+                        <p className="text-[9.5px] text-gray-500 dark:text-slate-400 font-mono">
+                          {(uploadedBill.size / (1024 * 1024)).toFixed(2)} MB • Attached
                         </p>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => setUploadedBill(null)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
-                      title="Remove file"
+                      className="p-1 text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                      title="Remove attached document"
                     >
-                      <X size={16} />
+                      <X size={14} />
                     </button>
-                  </div>
-                  <div className="flex items-center gap-2 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                    <CheckCircle2 size={13} />
-                    <span>Document attached to this inward bill</span>
                   </div>
                 </div>
               )}

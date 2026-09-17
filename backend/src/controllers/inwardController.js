@@ -105,6 +105,40 @@ export async function createInwardBill(req, res) {
       }
     }
 
+    // Strict Unique Serial Numbers Validation
+    const seenPayloadSerials = new Set()
+    for (const item of items) {
+      if (item.has_serial && Array.isArray(item.serial_numbers)) {
+        for (const rawSn of item.serial_numbers) {
+          const sn = String(rawSn || '').trim()
+          if (sn) {
+            const lower = sn.toLowerCase()
+            // 1. Check duplicate within current form
+            if (seenPayloadSerials.has(lower)) {
+              return res.status(400).json({
+                success: false,
+                message: `Duplicate serial number "${sn}" entered multiple times in this inward entry.`
+              })
+            }
+            seenPayloadSerials.add(lower)
+
+            // 2. Check if serial already exists in inventory_serials
+            const [existingSerials] = await pool.query(
+              'SELECT id, material_id, serial_number, status FROM inventory_serials WHERE LOWER(serial_number) = LOWER(?)',
+              [sn]
+            )
+            if (existingSerials.length > 0) {
+              const existingRecord = existingSerials[0]
+              return res.status(400).json({
+                success: false,
+                message: `Serial number "${sn}" already exists in inventory (Status: ${existingRecord.status}). Serial numbers must be unique.`
+              })
+            }
+          }
+        }
+      }
+    }
+
     // Insert into inward_bills table
     const [inwardResult] = await pool.query(`
       INSERT INTO inward_bills (
@@ -166,6 +200,35 @@ export async function createInwardBill(req, res) {
         item.has_serial ? 1 : 0,
         serialJson
       ])
+
+      // Update Materials current_stock (+) and record in stock_ledger
+      if (materialId) {
+        try {
+          const qtyVal = parseFloat(item.quantity) || 1
+          const [matRows] = await pool.query('SELECT current_stock, opening_stock FROM materials WHERE id = ?', [materialId])
+          if (matRows.length > 0) {
+            const currentStock = parseFloat(matRows[0].current_stock ?? matRows[0].opening_stock ?? 0)
+            const newStock = currentStock + qtyVal
+
+            await pool.query('UPDATE materials SET current_stock = ?, updated_at = NOW() WHERE id = ?', [newStock, materialId])
+
+            await pool.query(`
+              INSERT INTO stock_ledger (
+                material_id, movement_type, reference_number,
+                quantity_change, balance_stock, notes
+              ) VALUES (?, 'INWARD_PURCHASE', ?, ?, ?, ?)
+            `, [
+              materialId,
+              finalInwardNumber,
+              qtyVal,
+              newStock,
+              `Inward Purchase #${finalInwardNumber} (${supplier_name.trim()})`
+            ])
+          }
+        } catch (stockErr) {
+          console.error('Error updating stock on inward:', stockErr)
+        }
+      }
 
       // If material_id is present and has serials, register them in inventory_serials so Outward can use/verify them
       if (materialId && serials.length > 0) {
@@ -320,11 +383,46 @@ export async function deleteInwardBill(req, res) {
       })
     }
 
+    const inwardNo = existing[0].inward_number
+
+    // 1. Rollback stock for all items
+    const [items] = await pool.query('SELECT material_id, quantity FROM inward_bill_items WHERE inward_id = ?', [id])
+    for (const item of items) {
+      if (item.material_id) {
+        try {
+          const qtyVal = parseFloat(item.quantity) || 1
+          const [matRows] = await pool.query('SELECT current_stock, opening_stock FROM materials WHERE id = ?', [item.material_id])
+          if (matRows.length > 0) {
+            const currentStock = parseFloat(matRows[0].current_stock ?? matRows[0].opening_stock ?? 0)
+            const newStock = Math.max(0, currentStock - qtyVal)
+
+            await pool.query('UPDATE materials SET current_stock = ?, updated_at = NOW() WHERE id = ?', [newStock, item.material_id])
+
+            await pool.query(`
+              INSERT INTO stock_ledger (
+                material_id, movement_type, reference_number,
+                quantity_change, balance_stock, notes
+              ) VALUES (?, 'INWARD_REVERSAL', ?, ?, ?, ?)
+            `, [
+              item.material_id,
+              inwardNo,
+              -qtyVal,
+              newStock,
+              `Deleted Inward Entry #${inwardNo}`
+            ])
+          }
+        } catch (revertErr) {
+          console.error('Error reverting stock on inward delete:', revertErr)
+        }
+      }
+    }
+
+    // 2. Delete the inward bill (cascades items)
     await pool.query('DELETE FROM inward_bills WHERE id = ?', [id])
 
     return res.status(200).json({
       success: true,
-      message: `Inward record #${existing[0].inward_number} deleted successfully.`
+      message: `Inward record #${inwardNo} deleted successfully.`
     })
   } catch (error) {
     console.error('Error deleting inward bill:', error)

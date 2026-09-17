@@ -20,7 +20,8 @@ import {
   Hash,
   ShieldCheck,
   Clock,
-  Receipt
+  Receipt,
+  ImageDown
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Swal from 'sweetalert2'
@@ -227,6 +228,53 @@ export default function InwardReportsPage({ setActiveRoute }) {
     }
   }
 
+  // Download Attached Hardcopy / Bill Document
+  const handleDownloadHardcopy = async (url, inwardNumber) => {
+    if (!url) {
+      Swal.fire({
+        icon: 'info',
+        title: 'No Document Attached',
+        text: 'This inward entry does not have an attached hardcopy bill.',
+        confirmButtonColor: '#043486'
+      })
+      return
+    }
+
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      const ext = blob.type.includes('pdf') ? 'pdf' : (blob.type.includes('png') ? 'png' : 'jpg')
+      link.download = `Inward_${inwardNumber || 'Document'}.${ext}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(blobUrl)
+
+      Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true
+      }).fire({
+        icon: 'success',
+        title: 'Hardcopy document downloaded'
+      })
+    } catch {
+      // Fallback
+      const link = document.createElement('a')
+      link.href = url
+      link.target = '_blank'
+      link.download = `Inward_${inwardNumber || 'Document'}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
+  }
+
   // Export to Excel
   const handleExportExcel = () => {
     if (filteredInwards.length === 0) {
@@ -311,7 +359,7 @@ export default function InwardReportsPage({ setActiveRoute }) {
         />
         <ListKpiCard
           label="Total Materials Received"
-          value={`${stats.totalItems || 0} Units`}
+          value={`${Number(stats.totalItems || 0)} Units`}
           icon={Boxes}
           variant="blue"
         />
@@ -451,7 +499,7 @@ export default function InwardReportsPage({ setActiveRoute }) {
 
                       {/* Total Items */}
                       <td className="py-3.5 px-4 text-center font-mono font-semibold text-gray-700 dark:text-slate-300">
-                        {totalItemsCount}
+                        {Number(totalItemsCount) || 0}
                       </td>
 
                       {/* Total Amount */}
@@ -462,6 +510,18 @@ export default function InwardReportsPage({ setActiveRoute }) {
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadHardcopy(inv.hardcopy_url, inv.inward_number)}
+                            className={`p-1.5 transition-colors cursor-pointer ${
+                              inv.hardcopy_url
+                                ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-800'
+                                : 'text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800'
+                            }`}
+                            title={inv.hardcopy_url ? 'Download Hardcopy / Bill Document' : 'No Hardcopy Document Attached'}
+                          >
+                            <ImageDown size={15} />
+                          </button>
                           <button
                             onClick={() => handleOpenDetails(inv.id)}
                             className="p-1.5 text-[#043486] dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"

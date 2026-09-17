@@ -10,6 +10,7 @@ import billRoutes from './routes/billRoutes.js'
 import emailRoutes from './routes/emailRoutes.js'
 import inwardRoutes from './routes/inwardRoutes.js'
 import cloudinaryRoutes from './routes/cloudinaryRoutes.js'
+import inventoryRoutes from './routes/inventoryRoutes.js'
 
 dotenv.config()
 
@@ -51,6 +52,7 @@ app.use('/api/bills', billRoutes)
 app.use('/api/inwards', inwardRoutes)
 app.use('/api/email-config', emailRoutes)
 app.use('/api/cloudinary', cloudinaryRoutes)
+app.use('/api/inventory', inventoryRoutes)
 
 
 // Global Error Handler

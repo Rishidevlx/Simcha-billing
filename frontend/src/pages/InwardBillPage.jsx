@@ -396,58 +396,126 @@ export default function InwardBillPage({ setActiveRoute }) {
     })
   }
 
-  // Handle File Upload (Uploads to Cloudinary)
-  const handleFileUpload = (file) => {
+  // Helper function to compress images before uploading
+  const compressImageFile = (file) => {
+    return new Promise((resolve) => {
+      if (!file.type || !file.type.startsWith('image/')) {
+        // For non-images (like PDF), return raw base64
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result)
+        reader.readAsDataURL(file)
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+          const maxDimension = 1600 // High clarity while reducing file size drastically
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width)
+              width = maxDimension
+            } else {
+              width = Math.round((width * maxDimension) / height)
+              height = maxDimension
+            }
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0, width, height)
+
+          // Compress to JPEG with 0.75 quality (~80-90% smaller file size)
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.75)
+          resolve(compressedBase64)
+        }
+        img.onerror = () => {
+          resolve(e.target.result)
+        }
+        img.src = e.target.result
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  // Handle File Upload (5MB limit & compression before uploading to Cloudinary)
+  const handleFileUpload = async (file) => {
     if (!file) return
-    if (file.size > 10 * 1024 * 1024) {
+
+    // 1. Validation: Max Limit 5MB
+    const MAX_SIZE_BYTES = 5 * 1024 * 1024
+    if (file.size > MAX_SIZE_BYTES) {
       Swal.fire({
         icon: 'error',
         title: 'File Too Large',
-        text: 'Please upload a bill file smaller than 10MB.',
+        text: 'The selected bill file exceeds the 5MB limit. Please upload a file under 5MB.',
         confirmButtonColor: '#043486'
       })
       return
     }
+
+    // 2. Validation: Allowed File Types (Images and PDFs)
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'application/pdf']
+    if (file.type && !allowedTypes.includes(file.type.toLowerCase())) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Invalid File Format',
+        text: 'Please upload an image (JPG, PNG, WEBP) or a PDF document.',
+        confirmButtonColor: '#043486'
+      })
+      return
+    }
+
     setUploadedBill(file)
     setIsUploadingBill(true)
 
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      const base64Data = e.target.result
-      try {
-        const res = await fetch(API_ENDPOINTS.CLOUDINARY_UPLOAD, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            file: base64Data,
-            folder: 'simcha_billing/inward_bills'
-          })
+    try {
+      // 3. Compress image on-the-fly
+      const processedDataUrl = await compressImageFile(file)
+
+      const res = await fetch(API_ENDPOINTS.CLOUDINARY_UPLOAD, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file: processedDataUrl,
+          folder: 'simcha_billing/inward_bills'
         })
-        const data = await res.json()
-        if (data.success && data.url) {
-          setHardcopyUrl(data.url)
-          Toast.fire({
-            icon: 'success',
-            title: 'Bill uploaded to Cloudinary'
-          })
-        } else {
-          setHardcopyUrl(base64Data)
-          Toast.fire({
-            icon: 'info',
-            title: 'Hardcopy bill attached'
-          })
-        }
-      } catch (err) {
-        setHardcopyUrl(base64Data)
+      })
+      const data = await res.json()
+      if (data.success && data.url) {
+        setHardcopyUrl(data.url)
+        Toast.fire({
+          icon: 'success',
+          title: 'Bill compressed & uploaded to Cloudinary'
+        })
+      } else {
+        setHardcopyUrl(processedDataUrl)
         Toast.fire({
           icon: 'info',
           title: 'Hardcopy bill attached'
         })
-      } finally {
-        setIsUploadingBill(false)
       }
+    } catch (err) {
+      console.error('Error uploading bill:', err)
+      const rawBase64 = await new Promise((res) => {
+        const r = new FileReader()
+        r.onload = (e) => res(e.target.result)
+        r.readAsDataURL(file)
+      })
+      setHardcopyUrl(rawBase64)
+      Toast.fire({
+        icon: 'info',
+        title: 'Hardcopy bill attached'
+      })
+    } finally {
+      setIsUploadingBill(false)
     }
-    reader.readAsDataURL(file)
   }
 
   const handleReset = () => {

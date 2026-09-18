@@ -19,7 +19,10 @@ export const API_ENDPOINTS = {
   BILLS: `${API_BASE_URL}/api/bills`,
   BILL_BY_ID: (id) => `${API_BASE_URL}/api/bills/${id}`,
   BILL_PAYMENT_UPDATE: (id) => `${API_BASE_URL}/api/bills/${id}/payment`,
+  BILL_SEND_RECEIPT: (id) => `${API_BASE_URL}/api/bills/${id}/send-receipt`,
   NEXT_INVOICE_NUMBER: `${API_BASE_URL}/api/bills/meta/next-number`,
+  NEXT_RECEIPT_NUMBER: `${API_BASE_URL}/api/bills/meta/next-receipt-number`,
+
   INWARDS: `${API_BASE_URL}/api/inwards`,
   INWARD_BY_ID: (id) => `${API_BASE_URL}/api/inwards/${id}`,
   NEXT_INWARD_NUMBER: `${API_BASE_URL}/api/inwards/meta/next-number`,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import {
   Receipt,
@@ -26,12 +27,16 @@ import {
   SlidersHorizontal,
   Download,
   CheckSquare,
-  Square
+  Square,
+  Send,
+  FileCheck
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Swal from 'sweetalert2'
 import InvoiceModal from '../components/invoice/InvoiceModal'
 import InvoiceTemplate from '../components/invoice/InvoiceTemplate'
+import ReceiptModal from '../components/receipt/ReceiptModal'
+import ReceiptTemplate from '../components/receipt/ReceiptTemplate'
 import ListPageHeader from '../components/common/ListPageHeader'
 import ListKpiCard from '../components/common/ListKpiCard'
 import ListDateRangeFilter from '../components/common/ListDateRangeFilter'
@@ -39,6 +44,7 @@ import ListPagePagination from '../components/common/ListPagePagination'
 import { API_ENDPOINTS } from '../config/api'
 
 export default function AllBillsPage({ setActiveRoute }) {
+  const navigate = useNavigate()
   const [bills, setBills] = useState([])
   const [stats, setStats] = useState({ totalBills: 0, totalRevenue: 0, paidCount: 0, pendingCount: 0 })
   const [isLoading, setIsLoading] = useState(true)
@@ -64,6 +70,7 @@ export default function AllBillsPage({ setActiveRoute }) {
 
   // Selected Bill for Details / Print Modal
   const [selectedBill, setSelectedBill] = useState(null)
+  const [selectedReceiptBill, setSelectedReceiptBill] = useState(null)
   const [isLoadingDetails, setIsLoadingDetails] = useState(false)
 
   const fetchInitialData = async () => {
@@ -158,7 +165,7 @@ export default function AllBillsPage({ setActiveRoute }) {
     }
   }
 
-  // Direct Print Bill
+  // Direct Print Bill (Invoice)
   const handlePrintDirect = async (billId) => {
     try {
       const res = await fetch(API_ENDPOINTS.BILL_BY_ID(billId))
@@ -171,6 +178,128 @@ export default function AllBillsPage({ setActiveRoute }) {
       }
     } catch (err) {
       console.error('Error fetching bill for direct print:', err)
+    }
+  }
+
+  // Direct Print / Preview Receipt
+  const handlePrintReceipt = async (billId) => {
+    try {
+      const res = await fetch(API_ENDPOINTS.BILL_BY_ID(billId))
+      const data = await res.json()
+      if (data.success && data.bill) {
+        setSelectedReceiptBill(data.bill)
+      }
+    } catch (err) {
+      console.error('Error fetching bill for receipt:', err)
+    }
+  }
+
+  // Send Receipt Email to Customer (Active ONLY when Paid, one-time clickable)
+  const handleSendReceiptEmail = async (bill) => {
+    // 1. Validate status
+    if (bill.payment_status !== 'Paid') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Payment Pending',
+        text: 'Receipt email can only be sent once the invoice status is marked as PAID.',
+        confirmButtonColor: '#043486'
+      })
+      return
+    }
+
+    // 2. Check if already sent
+    if (bill.receipt_sent === 1 || bill.receipt_sent === true) {
+      const sentDate = bill.receipt_sent_at
+        ? new Date(bill.receipt_sent_at).toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        : 'an earlier date'
+      Swal.fire({
+        icon: 'info',
+        title: 'Receipt Already Sent',
+        html: `<p class="text-sm text-gray-600 dark:text-slate-300">Payment receipt for invoice <b>${bill.invoice_number}</b> has already been emailed to the customer on <b>${sentDate}</b>.</p><p class="text-xs text-gray-400 mt-2">To prevent duplicate emails, receipts can only be sent once.</p>`,
+        confirmButtonColor: '#043486'
+      })
+      return
+    }
+
+    // 3. Obtain & confirm recipient email
+    let targetEmail = (bill.customer_email || '').trim()
+
+    if (!targetEmail) {
+      const promptResult = await Swal.fire({
+        title: 'Send Payment Receipt',
+        text: `Customer email is missing for "${bill.customer_name}". Please enter recipient email:`,
+        input: 'email',
+        inputPlaceholder: 'customer@example.com',
+        showCancelButton: true,
+        confirmButtonColor: '#043486',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Send Receipt PDF',
+        inputValidator: (val) => {
+          if (!val || !val.trim()) {
+            return 'Please enter a valid email address!'
+          }
+        }
+      })
+
+      if (!promptResult.isConfirmed || !promptResult.value) return
+      targetEmail = promptResult.value.trim()
+    } else {
+      const confirmResult = await Swal.fire({
+        title: 'Send Payment Receipt?',
+        html: `<p class="text-sm text-gray-600">Send official receipt PDF for invoice <b>${bill.invoice_number}</b> to <b>${targetEmail}</b>?</p>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#043486',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Yes, Send Email'
+      })
+
+      if (!confirmResult.isConfirmed) return
+    }
+
+    // 4. Dispatch Email API
+    try {
+      Swal.fire({
+        title: 'Sending Receipt...',
+        text: 'Generating PDF and sending email...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading()
+        }
+      })
+
+      const res = await fetch(API_ENDPOINTS.BILL_SEND_RECEIPT(bill.id), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: targetEmail })
+      })
+      const data = await res.json()
+
+      if (data.success) {
+        setBills(prev => prev.map(b => b.id === bill.id ? { ...b, receipt_sent: 1, receipt_sent_at: new Date().toISOString() } : b))
+        Swal.fire({
+          icon: 'success',
+          title: 'Receipt Sent Successfully!',
+          text: `Payment receipt PDF has been emailed to ${targetEmail}.`,
+          confirmButtonColor: '#043486'
+        })
+      } else {
+        throw new Error(data.message || 'Failed to dispatch receipt email.')
+      }
+    } catch (err) {
+      console.error('Error sending receipt email:', err)
+      Swal.fire({
+        icon: 'error',
+        title: 'Failed to Send',
+        text: err.message || 'Error occurred while sending receipt email.',
+        confirmButtonColor: '#043486'
+      })
     }
   }
 
@@ -481,7 +610,10 @@ export default function AllBillsPage({ setActiveRoute }) {
               </span>
             </button>
             <button
-              onClick={() => setActiveRoute('create-bill')}
+              onClick={() => {
+                if (setActiveRoute) setActiveRoute('create-bill')
+                navigate('/outward')
+              }}
               className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#043486] hover:bg-[#0248BC] text-white font-bold text-xs rounded-none shadow-xs transition-all active:scale-[0.99] cursor-pointer"
             >
               <Plus size={15} />
@@ -725,10 +857,11 @@ export default function AllBillsPage({ setActiveRoute }) {
                       {/* Payment Type Dropdown */}
                       <td className="py-3.5 px-3 text-center">
                         <select
-                          value={bill.payment_mode || 'Cash'}
+                          value={bill.payment_mode || ''}
                           onChange={(e) => handleUpdatePaymentType(bill.id, e.target.value)}
                           className="px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] cursor-pointer hover:border-gray-400 transition-colors"
                         >
+                          <option value="">Select</option>
                           <option value="Cash">Cash</option>
                           <option value="UPI">UPI</option>
                           <option value="Online / Net Banking">Online / Net Banking</option>
@@ -759,6 +892,7 @@ export default function AllBillsPage({ setActiveRoute }) {
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center justify-center gap-1">
+                          {/* 1. Direct Print Invoice */}
                           <button
                             onClick={() => handlePrintDirect(bill.id)}
                             className="p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
@@ -766,13 +900,48 @@ export default function AllBillsPage({ setActiveRoute }) {
                           >
                             <Printer size={15} />
                           </button>
+
+                          {/* 2. Direct Print Receipt */}
+                          <button
+                            onClick={() => handlePrintReceipt(bill.id)}
+                            className="p-1.5 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="Print / View Payment Receipt"
+                          >
+                            <FileCheck size={15} />
+                          </button>
+
+                          {/* 3. Send Receipt Email (Active ONLY when Paid, turns light red once sent) */}
+                          <button
+                            onClick={() => handleSendReceiptEmail(bill)}
+                            disabled={bill.payment_status !== 'Paid'}
+                            className={`p-1.5 transition-colors ${
+                              bill.payment_status === 'Paid'
+                                ? bill.receipt_sent
+                                  ? 'text-red-600 dark:text-red-400 bg-red-50 hover:bg-red-100 dark:bg-red-950/60 border border-red-200 dark:border-red-900 cursor-pointer shadow-2xs'
+                                  : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer'
+                                : 'text-gray-300 dark:text-slate-700 cursor-not-allowed opacity-40'
+                            }`}
+                            title={
+                              bill.payment_status !== 'Paid'
+                                ? 'Send Receipt (Available only when status is Paid)'
+                                : bill.receipt_sent
+                                ? 'Receipt Already Sent (Click for details)'
+                                : 'Send Receipt Email to Customer'
+                            }
+                          >
+                            <Send size={15} />
+                          </button>
+
+                          {/* 4. View Invoice Modal / PDF */}
                           <button
                             onClick={() => handleViewBill(bill.id)}
                             className="p-1.5 text-[#043486] dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                            title="View / Download PDF"
+                            title="View / Download Invoice PDF"
                           >
                             <Eye size={15} />
                           </button>
+
+                          {/* 5. Delete Invoice */}
                           <button
                             onClick={() => handleDeleteBill(bill.id, bill.invoice_number)}
                             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
@@ -813,10 +982,26 @@ export default function AllBillsPage({ setActiveRoute }) {
         settings={settings}
       />
 
-      {/* 6. Direct Printable Invoice Portal for instant window.print() */}
+      {/* 6. High-Fidelity Payment Receipt Preview, Print & PDF Modal */}
+      <ReceiptModal
+        isOpen={Boolean(selectedReceiptBill)}
+        onClose={() => setSelectedReceiptBill(null)}
+        bill={selectedReceiptBill}
+        settings={settings}
+      />
+
+      {/* 7. Direct Printable Invoice Portal for instant window.print() */}
       {selectedBill && typeof document !== 'undefined' && createPortal(
         <div id="invoice-print-wrapper">
           <InvoiceTemplate bill={selectedBill} settings={settings} />
+        </div>,
+        document.body
+      )}
+
+      {/* 8. Direct Printable Receipt Portal for instant window.print() */}
+      {selectedReceiptBill && typeof document !== 'undefined' && createPortal(
+        <div id="receipt-print-wrapper">
+          <ReceiptTemplate bill={selectedReceiptBill} settings={settings} />
         </div>,
         document.body
       )}

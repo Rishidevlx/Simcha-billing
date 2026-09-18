@@ -78,7 +78,8 @@ body {
 }
 
 /* Hide print container on screen */
-#invoice-print-wrapper {
+#invoice-print-wrapper,
+#receipt-print-wrapper {
   display: none;
 }
 
@@ -107,8 +108,9 @@ body {
     display: none !important;
   }
 
-  /* Show ONLY the printable invoice wrapper */
-  #invoice-print-wrapper {
+  /* Show ONLY the printable invoice or receipt wrapper */
+  #invoice-print-wrapper,
+  #receipt-print-wrapper {
     display: block !important;
     position: static !important;
     width: 210mm !important;
@@ -117,7 +119,8 @@ body {
     background: #ffffff !important;
   }
 
-  #invoice-printable-area {
+  #invoice-printable-area,
+  #receipt-printable-area {
     display: block !important;
     width: 210mm !important;
     margin: 0 auto !important;
@@ -128,7 +131,8 @@ body {
     border: none !important;
   }
 
-  .invoice-page {
+  .invoice-page,
+  .receipt-page {
     width: 210mm !important;
     height: 297mm !important;
     min-height: 297mm !important;
@@ -145,7 +149,8 @@ body {
     justify-content: space-between !important;
   }
 
-  .invoice-page:last-child {
+  .invoice-page:last-child,
+  .receipt-page:last-child {
     page-break-after: avoid !important;
     break-after: avoid !important;
   }

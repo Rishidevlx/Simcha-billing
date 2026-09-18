@@ -218,12 +218,35 @@ export async function initDatabase() {
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         `)
 
-        // Ensure customer_email column exists in existing databases
+        // Ensure settings table has new columns (bank_image_url, numbering schemes, signature_url)
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN bank_image_url TEXT NULL AFTER branch;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN signature_url TEXT NULL AFTER bank_image_url;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN invoice_financial_year VARCHAR(20) DEFAULT '2026-27';`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN invoice_starting_number INT DEFAULT 1;`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN invoice_padding_digits INT DEFAULT 4;`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN invoice_separator VARCHAR(10) DEFAULT '/';`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN receipt_prefix VARCHAR(20) DEFAULT 'SIS-REC';`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN receipt_financial_year VARCHAR(20) DEFAULT '2026-27';`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN receipt_starting_number INT DEFAULT 1;`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN receipt_padding_digits INT DEFAULT 4;`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN receipt_separator VARCHAR(10) DEFAULT '/';`)
+        } catch {}
+
+        // Ensure customer_email and customer_type columns exist in bills
         try {
           await pool.query(`ALTER TABLE bills ADD COLUMN customer_email VARCHAR(191) NULL AFTER customer_phone;`)
-        } catch {
-          // Column already exists
-        }
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE bills ADD COLUMN customer_type VARCHAR(50) DEFAULT 'Individual' AFTER customer_name;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE bills ADD COLUMN receipt_number VARCHAR(100) NULL AFTER invoice_number;`)
+        } catch {}
 
         // Ensure payment_mode and payment_status support flexible strings and default to Pending
         try {
@@ -426,6 +449,42 @@ export async function initDatabase() {
         // Ensure bank_image_url column exists in settings
         try {
           await pool.query(`ALTER TABLE settings ADD COLUMN bank_image_url TEXT NULL AFTER branch;`)
+        } catch {}
+
+        // Ensure dynamic invoice numbering columns in settings
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN invoice_financial_year VARCHAR(20) DEFAULT '2026-27' AFTER invoice_prefix;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN invoice_starting_number INT DEFAULT 1 AFTER invoice_financial_year;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN invoice_padding_digits INT DEFAULT 4 AFTER invoice_starting_number;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN invoice_separator VARCHAR(10) DEFAULT '/' AFTER invoice_padding_digits;`)
+        } catch {}
+
+        // Ensure dynamic receipt numbering columns in settings
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN receipt_prefix VARCHAR(50) DEFAULT 'SIS-REC' AFTER invoice_separator;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN receipt_financial_year VARCHAR(20) DEFAULT '2026-27' AFTER receipt_prefix;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN receipt_starting_number INT DEFAULT 1 AFTER receipt_financial_year;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN receipt_padding_digits INT DEFAULT 4 AFTER receipt_starting_number;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN receipt_separator VARCHAR(10) DEFAULT '/' AFTER receipt_padding_digits;`)
+        } catch {}
+
+        // Ensure receipt_number column in bills
+        try {
+          await pool.query(`ALTER TABLE bills ADD COLUMN receipt_number VARCHAR(100) NULL AFTER invoice_number;`)
         } catch {}
 
         // Step 17: Create Cloudinary Configs table if not exists

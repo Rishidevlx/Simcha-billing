@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   FileText,
   Search,
@@ -32,6 +33,7 @@ import ListPagePagination from '../components/common/ListPagePagination'
 import { API_ENDPOINTS } from '../config/api'
 
 export default function InwardReportsPage({ setActiveRoute }) {
+  const navigate = useNavigate()
   const [inwards, setInwards] = useState([])
   const [stats, setStats] = useState({ totalInwards: 0, totalAmount: 0, totalItems: 0 })
   const [isLoading, setIsLoading] = useState(true)
@@ -333,7 +335,10 @@ export default function InwardReportsPage({ setActiveRoute }) {
               <span>EXPORT TO EXCEL</span>
             </button>
             <button
-              onClick={() => setActiveRoute('inward')}
+              onClick={() => {
+                if (setActiveRoute) setActiveRoute('inward')
+                navigate('/inward')
+              }}
               className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#043486] hover:bg-[#0248BC] text-white font-bold text-xs rounded-none shadow-xs transition-all active:scale-[0.99] cursor-pointer"
             >
               <Plus size={15} />

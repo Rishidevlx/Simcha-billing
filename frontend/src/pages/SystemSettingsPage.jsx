@@ -46,7 +46,20 @@ export default function SystemSettingsPage() {
   const [phone, setPhone] = useState('8122022060')
   const [email, setEmail] = useState('simchainfosolutions@gmail.com')
   const [gstin, setGstin] = useState('33GEZPM1178G1ZY')
-  const [invoicePrefix, setInvoicePrefix] = useState('INV-')
+  
+  // Dynamic Invoice Numbering Settings
+  const [invoicePrefix, setInvoicePrefix] = useState('SIS')
+  const [invoiceFinancialYear, setInvoiceFinancialYear] = useState('2026-27')
+  const [invoiceStartingNumber, setInvoiceStartingNumber] = useState('0001')
+  const [invoicePaddingDigits, setInvoicePaddingDigits] = useState('4')
+  const [invoiceSeparator, setInvoiceSeparator] = useState('/')
+
+  // Dynamic Receipt Numbering Settings
+  const [receiptPrefix, setReceiptPrefix] = useState('SIS-REC')
+  const [receiptFinancialYear, setReceiptFinancialYear] = useState('2026-27')
+  const [receiptStartingNumber, setReceiptStartingNumber] = useState('0001')
+  const [receiptPaddingDigits, setReceiptPaddingDigits] = useState('4')
+  const [receiptSeparator, setReceiptSeparator] = useState('/')
 
   // Tax Rates
   const [cgstRate, setCgstRate] = useState('9.00')
@@ -61,6 +74,8 @@ export default function SystemSettingsPage() {
   const [branch, setBranch] = useState('Peelamedu')
   const [bankImageUrl, setBankImageUrl] = useState('')
   const [isUploadingBankImg, setIsUploadingBankImg] = useState(false)
+  const [signatureUrl, setSignatureUrl] = useState('')
+  const [isUploadingSign, setIsUploadingSign] = useState(false)
   const [previewZoomImg, setPreviewZoomImg] = useState(null)
 
   // Terms & Conditions
@@ -99,7 +114,21 @@ export default function SystemSettingsPage() {
     setPhone(s.phone || '')
     setEmail(s.email || '')
     setGstin(s.gstin || '')
-    setInvoicePrefix(s.invoice_prefix || 'INV-')
+    setSignatureUrl(s.signature_url || '')
+    
+    // Invoice numbering
+    setInvoicePrefix(s.invoice_prefix !== undefined ? s.invoice_prefix : 'SIS')
+    setInvoiceFinancialYear(s.invoice_financial_year || '2026-27')
+    setInvoiceStartingNumber(s.invoice_starting_number !== undefined ? String(s.invoice_starting_number).padStart(parseInt(s.invoice_padding_digits || 4, 10), '0') : '0001')
+    setInvoicePaddingDigits(s.invoice_padding_digits !== undefined ? String(s.invoice_padding_digits) : '4')
+    setInvoiceSeparator(s.invoice_separator || '/')
+
+    // Receipt numbering
+    setReceiptPrefix(s.receipt_prefix !== undefined ? s.receipt_prefix : 'SIS-REC')
+    setReceiptFinancialYear(s.receipt_financial_year || '2026-27')
+    setReceiptStartingNumber(s.receipt_starting_number !== undefined ? String(s.receipt_starting_number).padStart(parseInt(s.receipt_padding_digits || 4, 10), '0') : '0001')
+    setReceiptPaddingDigits(s.receipt_padding_digits !== undefined ? String(s.receipt_padding_digits) : '4')
+    setReceiptSeparator(s.receipt_separator || '/')
 
     setCgstRate(s.cgst_rate !== undefined ? String(s.cgst_rate) : '9.00')
     setSgstRate(s.sgst_rate !== undefined ? String(s.sgst_rate) : '9.00')
@@ -153,13 +182,67 @@ export default function SystemSettingsPage() {
     })
   }
 
-  const handleUploadBankImage = (file) => {
+  // Helper function to compress image files before upload while preserving PNG transparency
+  const compressImageFile = (file) => {
+    return new Promise((resolve) => {
+      if (!file.type || !file.type.startsWith('image/')) {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result)
+        reader.readAsDataURL(file)
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const isTransparentFormat = file.type === 'image/png' || file.type === 'image/webp' || file.type === 'image/svg+xml'
+
+        // If it's a transparent image (e.g. signature PNG) and under 2MB, preserve original data URL directly to retain 100% transparency
+        if (isTransparentFormat && file.size < 2 * 1024 * 1024) {
+          resolve(e.target.result)
+          return
+        }
+
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+          const maxDimension = 1400
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width)
+              width = maxDimension
+            } else {
+              width = Math.round((width * maxDimension) / height)
+              height = maxDimension
+            }
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx.clearRect(0, 0, width, height)
+          ctx.drawImage(img, 0, 0, width, height)
+
+          const outputMime = isTransparentFormat ? 'image/png' : 'image/jpeg'
+          const compressedBase64 = canvas.toDataURL(outputMime, isTransparentFormat ? undefined : 0.85)
+          resolve(compressedBase64)
+        }
+        img.onerror = () => resolve(e.target.result)
+        img.src = e.target.result
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleUploadBankImage = async (file) => {
     if (!file) return
-    if (file.size > 10 * 1024 * 1024) {
+    if (file.size > 5 * 1024 * 1024) {
       Swal.fire({
         icon: 'error',
         title: 'File Too Large',
-        text: 'Please upload an image smaller than 10MB.',
+        text: 'Please upload an image smaller than 5MB.',
         confirmButtonColor: '#043486'
       })
       return
@@ -167,59 +250,260 @@ export default function SystemSettingsPage() {
 
     try {
       setIsUploadingBankImg(true)
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        const base64Data = e.target.result
-        try {
-          const res = await fetch(API_ENDPOINTS.CLOUDINARY_UPLOAD, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              file: base64Data,
-              folder: 'simcha_billing/bank'
-            })
+      const compressedDataUrl = await compressImageFile(file)
+      try {
+        const res = await fetch(API_ENDPOINTS.CLOUDINARY_UPLOAD, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file: compressedDataUrl,
+            folder: 'simcha_billing/bank'
           })
-          const data = await res.json()
-          if (data.success && data.url) {
-            setBankImageUrl(data.url)
-            Swal.mixin({
-              toast: true,
-              position: 'top-end',
-              showConfirmButton: false,
-              timer: 2000,
-              timerProgressBar: true
-            }).fire({
-              icon: 'success',
-              title: 'Bank image uploaded to Cloudinary'
-            })
-          } else {
-            setBankImageUrl(base64Data)
-            Swal.mixin({
-              toast: true,
-              position: 'top-end',
-              showConfirmButton: false,
-              timer: 2000,
-              timerProgressBar: true
-            }).fire({
-              icon: 'info',
-              title: 'Bank image attached locally'
-            })
-          }
-        } catch (uploadErr) {
-          setBankImageUrl(base64Data)
-        } finally {
-          setIsUploadingBankImg(false)
+        })
+        const data = await res.json()
+        if (data.success && data.url) {
+          setBankImageUrl(data.url)
+          Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2000,
+            timerProgressBar: true
+          }).fire({
+            icon: 'success',
+            title: 'Bank image uploaded to Cloudinary'
+          })
+        } else {
+          setBankImageUrl(compressedDataUrl)
+          Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2000,
+            timerProgressBar: true
+          }).fire({
+            icon: 'info',
+            title: 'Bank image attached locally'
+          })
         }
+      } catch (uploadErr) {
+        setBankImageUrl(compressedDataUrl)
+      } finally {
+        setIsUploadingBankImg(false)
       }
-      reader.readAsDataURL(file)
     } catch (err) {
       console.error('Error uploading bank image:', err)
       setIsUploadingBankImg(false)
     }
   }
 
+  const handleUploadSignature = async (file) => {
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      Swal.fire({
+        icon: 'error',
+        title: 'File Too Large',
+        text: 'Please upload a signature image smaller than 5MB.',
+        confirmButtonColor: '#043486'
+      })
+      return
+    }
+
+    try {
+      setIsUploadingSign(true)
+      const compressedDataUrl = await compressImageFile(file)
+      try {
+        const res = await fetch(API_ENDPOINTS.CLOUDINARY_UPLOAD, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file: compressedDataUrl,
+            folder: 'simcha_billing/signatures'
+          })
+        })
+        const data = await res.json()
+        if (data.success && data.url) {
+          setSignatureUrl(data.url)
+          Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2000,
+            timerProgressBar: true
+          }).fire({
+            icon: 'success',
+            title: 'Signature uploaded to Cloudinary'
+          })
+        } else {
+          setSignatureUrl(compressedDataUrl)
+          Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2000,
+            timerProgressBar: true
+          }).fire({
+            icon: 'info',
+            title: 'Signature attached locally'
+          })
+        }
+      } catch (uploadErr) {
+        setSignatureUrl(compressedDataUrl)
+      } finally {
+        setIsUploadingSign(false)
+      }
+    } catch (err) {
+      console.error('Error uploading signature:', err)
+      setIsUploadingSign(false)
+    }
+  }
+
   const handleSubmit = async (e, tabId = activeTab) => {
     if (e && e.preventDefault) e.preventDefault()
+
+    // Validation per tab
+    if (tabId === 'company') {
+      if (!companyName.trim() || companyName.trim().length < 2) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Validation Error',
+          text: 'Please enter a valid Company / Business Name (minimum 2 characters).',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      if (gstin.trim().length !== 15) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid GSTIN',
+          text: 'Company GSTIN must be exactly 15 characters (e.g. 33GEZPM1178G1ZY).',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      if (phone.trim().length < 10) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Phone Number',
+          text: 'Please enter a valid 10-digit mobile / phone number.',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(email.trim())) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Email',
+          text: 'Please enter a valid email address.',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      if (!address.trim()) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Address Required',
+          text: 'Please provide company address.',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      if (!invoicePrefix.trim() || invoicePrefix.trim().length > 10) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Invoice Prefix',
+          text: 'Invoice Prefix is required (maximum 10 characters).',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      if (!receiptPrefix.trim() || receiptPrefix.trim().length > 10) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Receipt Prefix',
+          text: 'Receipt Prefix is required (maximum 10 characters).',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      if (!invoiceFinancialYear.trim() || invoiceFinancialYear.trim().length > 7) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Financial Year',
+          text: 'Invoice Financial Year is required (maximum 7 characters, e.g. 2026-27).',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      if (!receiptFinancialYear.trim() || receiptFinancialYear.trim().length > 7) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Financial Year',
+          text: 'Receipt Financial Year is required (maximum 7 characters, e.g. 2026-27).',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      const invStart = parseInt(invoiceStartingNumber, 10)
+      if (isNaN(invStart) || invStart < 1 || invStart > 999999) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Starting Number',
+          text: 'Invoice starting number must be between 1 and 999999.',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      const recStart = parseInt(receiptStartingNumber, 10)
+      if (isNaN(recStart) || recStart < 1 || recStart > 999999) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Starting Number',
+          text: 'Receipt starting number must be between 1 and 999999.',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+    }
+
+    if (tabId === 'bank') {
+      if (ifscCode.trim() && ifscCode.trim().length !== 11) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid IFSC Code',
+          text: 'IFSC Code must be exactly 11 characters (e.g. CNRB0002732).',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+    }
+
+    if (tabId === 'taxes') {
+      const cgst = parseFloat(cgstRate)
+      const sgst = parseFloat(sgstRate)
+      const igst = parseFloat(igstRate)
+      if (isNaN(cgst) || cgst < 0 || cgst > 100 || isNaN(sgst) || sgst < 0 || sgst > 100 || isNaN(igst) || igst < 0 || igst > 100) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Tax Rates',
+          text: 'Tax rates must be between 0% and 100%.',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+    }
+
     setIsSaving(true)
 
     try {
@@ -229,7 +513,17 @@ export default function SystemSettingsPage() {
         phone: phone.trim(),
         email: email.trim(),
         gstin: gstin.trim(),
+        signature_url: signatureUrl || null,
         invoice_prefix: invoicePrefix.trim(),
+        invoice_financial_year: invoiceFinancialYear.trim(),
+        invoice_starting_number: parseInt(invoiceStartingNumber, 10) || 1,
+        invoice_padding_digits: parseInt(invoicePaddingDigits, 10) || 4,
+        invoice_separator: invoiceSeparator || '/',
+        receipt_prefix: receiptPrefix.trim(),
+        receipt_financial_year: receiptFinancialYear.trim(),
+        receipt_starting_number: parseInt(receiptStartingNumber, 10) || 1,
+        receipt_padding_digits: parseInt(receiptPaddingDigits, 10) || 4,
+        receipt_separator: receiptSeparator || '/',
         cgst_rate: parseFloat(cgstRate) || 9.00,
         sgst_rate: parseFloat(sgstRate) || 9.00,
         igst_rate: parseFloat(igstRate) || 18.00,
@@ -288,10 +582,10 @@ export default function SystemSettingsPage() {
   const isCurrentTabEditing = editStates[activeTab]
 
   const tabs = [
-    { id: 'company', label: 'Company Profile', icon: Building2, desc: 'Header details & contact info' },
-    { id: 'taxes', label: 'Tax & GST Rates', icon: Percent, desc: 'CGST, SGST & IGST calculation' },
-    { id: 'bank', label: 'Bank Account', icon: Landmark, desc: 'Invoice payment beneficiary' },
-    { id: 'terms', label: 'Terms & Conditions', icon: FileText, desc: 'Printed invoice legal clauses', badge: terms.length }
+    { id: 'company', label: 'Company Profile', icon: Building2 },
+    { id: 'taxes', label: 'Tax & GST Rates', icon: Percent },
+    { id: 'bank', label: 'Bank Account', icon: Landmark },
+    { id: 'terms', label: 'Terms & Conditions', icon: FileText, badge: terms.length }
   ]
 
   return (
@@ -300,7 +594,7 @@ export default function SystemSettingsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-none border border-gray-200 dark:border-slate-800 shadow-sm transition-colors">
         <div>
           <h1 className="text-xl font-bold text-[#292424] dark:text-white">System &amp; Company Settings</h1>
-          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Configure Company profile, Tax rates, Bank accounts and Terms &amp; Conditions.</p>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Configure Company profile, Invoice &amp; Receipt numbering schemes, Tax rates, Bank accounts and Terms.</p>
         </div>
       </div>
 
@@ -315,31 +609,26 @@ export default function SystemSettingsPage() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-3 p-3 text-left transition-all cursor-pointer rounded-none relative ${
+              className={`flex items-center gap-2.5 p-3 text-left transition-all cursor-pointer rounded-none relative ${
                 isActive
                   ? 'bg-[#043486] text-white shadow-sm'
                   : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 border border-transparent'
               }`}
             >
-              <div className={`p-2 rounded-none ${isActive ? 'bg-white/15 text-white' : 'bg-gray-100 dark:bg-slate-800 text-[#043486] dark:text-blue-400'}`}>
-                <Icon size={18} />
+              <div className={`p-1.5 rounded-none ${isActive ? 'bg-white/15 text-white' : 'bg-gray-100 dark:bg-slate-800 text-[#043486] dark:text-blue-400'}`}>
+                <Icon size={16} />
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold truncate">{tab.label}</span>
-                  {isTabEditing ? (
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 bg-amber-400 text-slate-900 rounded-none animate-pulse">
-                      EDITING
-                    </span>
-                  ) : tab.badge !== undefined ? (
-                    <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-none ${isActive ? 'bg-white text-[#043486]' : 'bg-blue-100 dark:bg-blue-950 text-[#043486] dark:text-blue-300'}`}>
-                      {tab.badge}
-                    </span>
-                  ) : null}
-                </div>
-                <p className={`text-[10px] truncate ${isActive ? 'text-blue-100' : 'text-gray-400 dark:text-slate-500'}`}>
-                  {tab.desc}
-                </p>
+              <div className="min-w-0 flex-1 flex items-center justify-between">
+                <span className="text-xs font-bold truncate">{tab.label}</span>
+                {isTabEditing ? (
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 bg-amber-400 text-slate-900 rounded-none animate-pulse ml-1 shrink-0">
+                    EDITING
+                  </span>
+                ) : tab.badge !== undefined ? (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-none ml-1 shrink-0 ${isActive ? 'bg-white text-[#043486]' : 'bg-blue-100 dark:bg-blue-950 text-[#043486] dark:text-blue-300'}`}>
+                    {tab.badge}
+                  </span>
+                ) : null}
               </div>
             </button>
           )
@@ -350,136 +639,458 @@ export default function SystemSettingsPage() {
         
         {/* ================= TAB 1: COMPANY PROFILE ================= */}
         {activeTab === 'company' && (
-          <div className="bg-white dark:bg-slate-900 rounded-none border border-gray-200 dark:border-slate-800 p-6 shadow-sm space-y-6 transition-colors">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <Building2 size={18} className="text-[#043486] dark:text-blue-400" />
-                <h2 className="text-base font-bold text-[#292424] dark:text-white">Company Profile &amp; Billing Header</h2>
+          <div className="space-y-6">
+            {/* 1. Company Profile & Billing Header Card */}
+            <div className="bg-white dark:bg-slate-900 rounded-none border border-gray-200 dark:border-slate-800 p-6 shadow-sm space-y-6 transition-colors">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <Building2 size={18} className="text-[#043486] dark:text-blue-400" />
+                  <h2 className="text-base font-bold text-[#292424] dark:text-white">Company Profile &amp; Billing Header</h2>
+                </div>
+                
+                {/* Tab Header Edit Button */}
+                {!editStates.company ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleEditTab('company', true)}
+                    className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#043486] hover:bg-[#0248BC] rounded-none transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Edit2 size={13} />
+                    <span>Edit Profile</span>
+                  </button>
+                ) : (
+                  <span className="text-xs px-2.5 py-1 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 font-bold">
+                    Editing Mode Active
+                  </span>
+                )}
               </div>
-              
-              {/* Tab Header Edit Button */}
-              {!editStates.company ? (
-                <button
-                  type="button"
-                  onClick={() => toggleEditTab('company', true)}
-                  className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#043486] hover:bg-[#0248BC] rounded-none transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Edit2 size={13} />
-                  <span>Edit Profile</span>
-                </button>
-              ) : (
-                <span className="text-xs px-2.5 py-1 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 font-bold">
-                  Editing Mode Active
-                </span>
-              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Company / Business Name *</label>
+                  <input
+                    type="text"
+                    disabled={!editStates.company}
+                    value={companyName}
+                    maxLength={100}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    required
+                    className={`w-full px-3.5 py-2.5 text-sm font-medium rounded-none transition-all ${
+                      editStates.company
+                        ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 ring-1 ring-[#043486]/10'
+                        : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
+                    }`}
+                    placeholder="Enter company name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Company GSTIN Number *</label>
+                  <input
+                    type="text"
+                    disabled={!editStates.company}
+                    value={gstin}
+                    maxLength={15}
+                    onChange={(e) => setGstin(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15))}
+                    required
+                    className={`w-full px-3.5 py-2.5 text-sm uppercase rounded-none font-mono font-semibold transition-all ${
+                      editStates.company
+                        ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 ring-1 ring-[#043486]/10'
+                        : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
+                    }`}
+                    placeholder="Enter GSTIN number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Official Phone / Mobile Number *</label>
+                  <input
+                    type="text"
+                    disabled={!editStates.company}
+                    value={phone}
+                    maxLength={10}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    required
+                    className={`w-full px-3.5 py-2.5 text-sm font-medium font-mono rounded-none transition-all ${
+                      editStates.company
+                        ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 ring-1 ring-[#043486]/10'
+                        : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
+                    }`}
+                    placeholder="Enter phone number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Official Email Address *</label>
+                  <input
+                    type="email"
+                    disabled={!editStates.company}
+                    value={email}
+                    maxLength={60}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className={`w-full px-3.5 py-2.5 text-sm font-medium rounded-none transition-all ${
+                      editStates.company
+                        ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 ring-1 ring-[#043486]/10'
+                        : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
+                    }`}
+                    placeholder="Enter official email"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Company Full Address *</label>
+                  <textarea
+                    rows={2}
+                    disabled={!editStates.company}
+                    value={address}
+                    maxLength={250}
+                    onChange={(e) => setAddress(e.target.value)}
+                    required
+                    className={`w-full px-3.5 py-2.5 text-sm font-medium rounded-none transition-all ${
+                      editStates.company
+                        ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 ring-1 ring-[#043486]/10'
+                        : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
+                    }`}
+                    placeholder="Enter company address"
+                  />
+                </div>
+
+                {/* Authorized Company Sign Upload */}
+                <div className="md:col-span-2 pt-3 border-t border-gray-100 dark:border-slate-800/80">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <label className="block text-xs font-bold text-gray-800 dark:text-slate-200">
+                      Authorized Signatory Signature / Seal
+                    </label>
+                    {signatureUrl && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 border border-emerald-200 dark:border-emerald-800">
+                        <CheckCircle2 size={12} /> Signature Active
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-3 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800">
+                    {/* Signature Preview Thumbnail */}
+                    <div className="relative group w-36 h-18 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 flex items-center justify-center p-1.5 overflow-hidden shrink-0 shadow-2xs">
+                      {signatureUrl ? (
+                        <>
+                          <img
+                            src={signatureUrl}
+                            alt="Authorized Signature"
+                            className="max-h-full max-w-full object-contain cursor-pointer"
+                            onClick={() => setPreviewZoomImg(signatureUrl)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPreviewZoomImg(signatureUrl)}
+                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1"
+                            title="Preview signature"
+                          >
+                            <ZoomIn size={14} /> View
+                          </button>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-gray-400 dark:text-slate-500 text-center px-2">
+                          <ImageIcon size={18} className="mb-1 opacity-60" />
+                          <span className="text-[10px] leading-tight">No Signature</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions / Upload Controls */}
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label
+                          className={`px-3.5 py-1.5 text-xs font-bold rounded-none flex items-center gap-1.5 transition-all shadow-xs ${
+                            editStates.company && !isUploadingSign
+                              ? 'bg-[#043486] hover:bg-[#0248BC] text-white cursor-pointer'
+                              : 'bg-gray-200 dark:bg-slate-800 text-gray-400 dark:text-slate-600 cursor-not-allowed'
+                          }`}
+                        >
+                          <UploadCloud size={14} />
+                          <span>{isUploadingSign ? 'Processing...' : signatureUrl ? 'Change Signature' : 'Upload Signature'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={!editStates.company || isUploadingSign}
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) handleUploadSignature(file)
+                              e.target.value = ''
+                            }}
+                          />
+                        </label>
+
+                        {signatureUrl && editStates.company && (
+                          <button
+                            type="button"
+                            onClick={() => setSignatureUrl('')}
+                            className="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900 transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 size={13} />
+                            <span>Remove</span>
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-400 dark:text-slate-500">
+                        {editStates.company 
+                          ? 'Supports transparent PNG or JPG (Max 5MB).'
+                          : 'Click "Edit Profile" above to change signature.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Company / Business Name *</label>
-                <input
-                  type="text"
-                  disabled={!editStates.company}
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  required
-                  className={`w-full px-3.5 py-2.5 text-sm font-medium rounded-none transition-all ${
-                    editStates.company
-                      ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 ring-1 ring-[#043486]/10'
-                      : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
-                  }`}
-                  placeholder="Enter company name"
-                />
+            {/* 2. Bill & Receipt Numbering Schemes Card (Neutral & Clean) */}
+            <div className="bg-white dark:bg-slate-900 rounded-none border border-gray-200 dark:border-slate-800 p-6 shadow-sm space-y-6 transition-colors">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <Hash size={18} className="text-[#043486] dark:text-blue-400" />
+                  <h2 className="text-base font-bold text-[#292424] dark:text-white">Bill &amp; Receipt Numbering Settings</h2>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Company GSTIN Number *</label>
-                <input
-                  type="text"
-                  disabled={!editStates.company}
-                  value={gstin}
-                  onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                  required
-                  className={`w-full px-3.5 py-2.5 text-sm uppercase rounded-none font-mono font-semibold transition-all ${
-                    editStates.company
-                      ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 ring-1 ring-[#043486]/10'
-                      : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
-                  }`}
-                  placeholder="Enter GSTIN number"
-                />
-              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* --- CARD 1: TAX INVOICE NUMBERING CONFIGURATION --- */}
+                <div className="bg-gray-50/50 dark:bg-slate-950/50 border border-gray-200 dark:border-slate-800 p-5 rounded-none space-y-4">
+                  <div className="pb-2 border-b border-gray-200 dark:border-slate-800">
+                    <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200">
+                      Tax Invoice Settings
+                    </h3>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Invoice Number Prefix</label>
-                <input
-                  type="text"
-                  disabled={!editStates.company}
-                  value={invoicePrefix}
-                  onChange={(e) => setInvoicePrefix(e.target.value.toUpperCase())}
-                  className={`w-full px-3.5 py-2.5 text-sm uppercase rounded-none font-mono font-bold transition-all ${
-                    editStates.company
-                      ? 'text-[#043486] dark:text-blue-400 bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 ring-1 ring-[#043486]/10'
-                      : 'text-[#043486]/70 dark:text-blue-400/70 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
-                  }`}
-                  placeholder="e.g. INV-"
-                />
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Prefix *
+                      </label>
+                      <input
+                        type="text"
+                        disabled={!editStates.company}
+                        value={invoicePrefix}
+                        maxLength={10}
+                        onChange={(e) => setInvoicePrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 10))}
+                        placeholder="INV"
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none uppercase transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      />
+                    </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Official Phone / Mobile Number *</label>
-                <input
-                  type="text"
-                  disabled={!editStates.company}
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                  className={`w-full px-3.5 py-2.5 text-sm font-medium font-mono rounded-none transition-all ${
-                    editStates.company
-                      ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 ring-1 ring-[#043486]/10'
-                      : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
-                  }`}
-                  placeholder="Enter phone number"
-                />
-              </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Financial Year *
+                      </label>
+                      <input
+                        type="text"
+                        disabled={!editStates.company}
+                        value={invoiceFinancialYear}
+                        maxLength={7}
+                        onChange={(e) => setInvoiceFinancialYear(e.target.value.replace(/[^0-9-]/g, '').slice(0, 7))}
+                        placeholder="2026-27"
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-[#292424] dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      />
+                    </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Official Email Address *</label>
-                <input
-                  type="email"
-                  disabled={!editStates.company}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className={`w-full px-3.5 py-2.5 text-sm font-medium rounded-none transition-all ${
-                    editStates.company
-                      ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 ring-1 ring-[#043486]/10'
-                      : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
-                  }`}
-                  placeholder="Enter official email"
-                />
-              </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Starting Number *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="999999"
+                        disabled={!editStates.company}
+                        value={invoiceStartingNumber}
+                        onChange={(e) => setInvoiceStartingNumber(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="1"
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-[#292424] dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      />
+                    </div>
 
-              <div className="md:col-span-2 lg:col-span-3">
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Company Full Address *</label>
-                <textarea
-                  rows={2}
-                  disabled={!editStates.company}
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  required
-                  className={`w-full px-3.5 py-2.5 text-sm font-medium rounded-none transition-all ${
-                    editStates.company
-                      ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 ring-1 ring-[#043486]/10'
-                      : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
-                  }`}
-                  placeholder="Enter company address"
-                />
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Separator / Delimiter
+                      </label>
+                      <select
+                        disabled={!editStates.company}
+                        value={invoiceSeparator}
+                        onChange={(e) => setInvoiceSeparator(e.target.value)}
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-[#292424] dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] cursor-pointer'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      >
+                        <option value="/">Slash ( / )</option>
+                        <option value="-">Hyphen ( - )</option>
+                        <option value=".">Dot ( . )</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Live Invoice Preview Box */}
+                  <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-3.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        Generated Invoice Examples:
+                      </span>
+                      <span className="text-[10px] font-mono text-gray-600 dark:text-slate-400">
+                        Format: Prefix{invoiceSeparator}FY{invoiceSeparator}Seq
+                      </span>
+                    </div>
+                    <div className="space-y-1 font-mono text-xs font-bold text-gray-800 dark:text-slate-200">
+                      <div className="p-1.5 bg-gray-50 dark:bg-slate-800 border-l-2 border-gray-400 dark:border-slate-600 flex items-center justify-between">
+                        <span>{invoicePrefix || 'SIS'}{invoiceSeparator}{invoiceFinancialYear || '2026-27'}{invoiceSeparator}{String(parseInt(invoiceStartingNumber, 10) || 1).padStart(parseInt(invoicePaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[10px] text-gray-400 font-sans font-normal">(1st Bill)</span>
+                      </div>
+                      <div className="p-1.5 bg-gray-50/60 dark:bg-slate-850 border-l-2 border-gray-300 dark:border-slate-700 flex items-center justify-between text-gray-700 dark:text-slate-300">
+                        <span>{invoicePrefix || 'SIS'}{invoiceSeparator}{invoiceFinancialYear || '2026-27'}{invoiceSeparator}{String((parseInt(invoiceStartingNumber, 10) || 1) + 1).padStart(parseInt(invoicePaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[10px] text-gray-400 font-sans font-normal">(2nd Bill)</span>
+                      </div>
+                      <div className="p-1.5 bg-gray-50/30 dark:bg-slate-900 border-l-2 border-gray-200 dark:border-slate-800 flex items-center justify-between text-gray-500 dark:text-slate-400">
+                        <span>{invoicePrefix || 'SIS'}{invoiceSeparator}{invoiceFinancialYear || '2026-27'}{invoiceSeparator}{String((parseInt(invoiceStartingNumber, 10) || 1) + 2).padStart(parseInt(invoicePaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[10px] text-gray-400 font-sans font-normal">(3rd Bill)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* --- CARD 2: PAYMENT RECEIPT NUMBERING CONFIGURATION --- */}
+                <div className="bg-gray-50/50 dark:bg-slate-950/50 border border-gray-200 dark:border-slate-800 p-5 rounded-none space-y-4">
+                  <div className="pb-2 border-b border-gray-200 dark:border-slate-800">
+                    <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200">
+                      Receipt Settings
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Receipt Prefix *
+                      </label>
+                      <input
+                        type="text"
+                        disabled={!editStates.company}
+                        value={receiptPrefix}
+                        maxLength={10}
+                        onChange={(e) => setReceiptPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 10))}
+                        placeholder="REC"
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none uppercase transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Financial Year *
+                      </label>
+                      <input
+                        type="text"
+                        disabled={!editStates.company}
+                        value={receiptFinancialYear}
+                        maxLength={7}
+                        onChange={(e) => setReceiptFinancialYear(e.target.value.replace(/[^0-9-]/g, '').slice(0, 7))}
+                        placeholder="2026-27"
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-[#292424] dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Starting Number *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="999999"
+                        disabled={!editStates.company}
+                        value={receiptStartingNumber}
+                        onChange={(e) => setReceiptStartingNumber(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="1"
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-[#292424] dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Separator / Delimiter
+                      </label>
+                      <select
+                        disabled={!editStates.company}
+                        value={receiptSeparator}
+                        onChange={(e) => setReceiptSeparator(e.target.value)}
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-[#292424] dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] cursor-pointer'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      >
+                        <option value="/">Slash ( / )</option>
+                        <option value="-">Hyphen ( - )</option>
+                        <option value=".">Dot ( . )</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Live Receipt Preview Box */}
+                  <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-3.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        Generated Receipt Examples:
+                      </span>
+                      <span className="text-[10px] font-mono text-gray-600 dark:text-slate-400">
+                        Format: Prefix{receiptSeparator}FY{receiptSeparator}Seq
+                      </span>
+                    </div>
+                    <div className="space-y-1 font-mono text-xs font-bold text-gray-800 dark:text-slate-200">
+                      <div className="p-1.5 bg-gray-50 dark:bg-slate-800 border-l-2 border-gray-400 dark:border-slate-600 flex items-center justify-between">
+                        <span>{receiptPrefix || 'SIS-REC'}{receiptSeparator}{receiptFinancialYear || '2026-27'}{receiptSeparator}{String(parseInt(receiptStartingNumber, 10) || 1).padStart(parseInt(receiptPaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[10px] text-gray-400 font-sans font-normal">(1st Receipt)</span>
+                      </div>
+                      <div className="p-1.5 bg-gray-50/60 dark:bg-slate-850 border-l-2 border-gray-300 dark:border-slate-700 flex items-center justify-between text-gray-700 dark:text-slate-300">
+                        <span>{receiptPrefix || 'SIS-REC'}{receiptSeparator}{receiptFinancialYear || '2026-27'}{receiptSeparator}{String((parseInt(receiptStartingNumber, 10) || 1) + 1).padStart(parseInt(receiptPaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[10px] text-gray-400 font-sans font-normal">(2nd Receipt)</span>
+                      </div>
+                      <div className="p-1.5 bg-gray-50/30 dark:bg-slate-900 border-l-2 border-gray-200 dark:border-slate-800 flex items-center justify-between text-gray-500 dark:text-slate-400">
+                        <span>{receiptPrefix || 'SIS-REC'}{receiptSeparator}{receiptFinancialYear || '2026-27'}{receiptSeparator}{String((parseInt(receiptStartingNumber, 10) || 1) + 2).padStart(parseInt(receiptPaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[10px] text-gray-400 font-sans font-normal">(3rd Receipt)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
         )}
 
-        {/* ================= TAB 2: TAX & GST RATES ================= */}
+        {/* ================= TAB 3: TAX & GST RATES ================= */}
         {activeTab === 'taxes' && (
           <div className="bg-white dark:bg-slate-900 rounded-none border border-gray-200 dark:border-slate-800 p-6 shadow-sm space-y-6 transition-colors">
             <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-800">
@@ -623,7 +1234,7 @@ export default function SystemSettingsPage() {
                       ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500'
                       : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
                   }`}
-                  placeholder="e.g. Canara Bank"
+                  placeholder="Enter bank name"
                 />
               </div>
 
@@ -639,7 +1250,7 @@ export default function SystemSettingsPage() {
                       ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500'
                       : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
                   }`}
-                  placeholder="e.g. Simcha Info Solutions"
+                  placeholder="Enter account name"
                 />
               </div>
 
@@ -671,7 +1282,7 @@ export default function SystemSettingsPage() {
                       ? 'text-[#043486] dark:text-blue-400 bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500'
                       : 'text-[#043486]/70 dark:text-blue-400/70 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
                   }`}
-                  placeholder="e.g. CNRB0002732"
+                  placeholder="Enter IFSC code"
                 />
               </div>
 
@@ -687,7 +1298,7 @@ export default function SystemSettingsPage() {
                       ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500'
                       : 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
                   }`}
-                  placeholder="e.g. Peelamedu"
+                  placeholder="Enter branch name"
                 />
               </div>
             </div>
@@ -972,6 +1583,44 @@ export default function SystemSettingsPage() {
         )}
 
       </form>
+
+      {/* Signature & Image Fullscreen Zoom Modal */}
+      {previewZoomImg && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in"
+          onClick={() => setPreviewZoomImg(null)}
+        >
+          <div 
+            className="relative bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 p-6 max-w-lg w-full shadow-2xl flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewZoomImg(null)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 dark:hover:text-white p-1"
+            >
+              <X size={18} />
+            </button>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-slate-300 mb-4 self-start">
+              Authorized Signature Preview
+            </h3>
+            <div className="w-full bg-white dark:bg-slate-950 p-6 flex items-center justify-center border border-gray-200 dark:border-slate-800 rounded-none shadow-inner">
+              <img
+                src={previewZoomImg}
+                alt="Zoomed Preview"
+                className="max-h-56 max-w-full object-contain"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setPreviewZoomImg(null)}
+              className="mt-5 px-5 py-2 text-xs font-bold text-white bg-[#043486] hover:bg-[#0248BC] transition-colors"
+            >
+              Close Preview
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

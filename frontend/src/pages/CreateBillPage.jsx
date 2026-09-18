@@ -88,6 +88,7 @@ export default function CreateBillPage({ setActiveRoute }) {
   const [placeOfSupply, setPlaceOfSupply] = useState('33 - Tamil Nadu')
 
   // Customer Information
+  const [customerType, setCustomerType] = useState('Individual') // 'Individual' | 'Company'
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
@@ -661,6 +662,7 @@ export default function CreateBillPage({ setActiveRoute }) {
 
   // Reset form
   const handleReset = () => {
+    setCustomerType('Individual')
     setCustomerName('')
     setCustomerPhone('')
     setCustomerEmail('')
@@ -797,6 +799,7 @@ export default function CreateBillPage({ setActiveRoute }) {
         invoice_date: invoiceDate,
         invoice_type: invoiceType,
         copy_type: copyType,
+        customer_type: customerType || 'Individual',
         customer_name: customerName.trim(),
         customer_phone: customerPhone.trim(),
         customer_email: customerEmail.trim(),
@@ -977,7 +980,7 @@ export default function CreateBillPage({ setActiveRoute }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Invoice Date *</label>
                   <input
@@ -998,6 +1001,20 @@ export default function CreateBillPage({ setActiveRoute }) {
                     placeholder="Select or search state..."
                   />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
+                    Customer / Party Type *
+                  </label>
+                  <select
+                    value={customerType}
+                    onChange={(e) => setCustomerType(e.target.value)}
+                    className="w-full px-3.5 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-semibold cursor-pointer"
+                  >
+                    <option value="Individual">Individual (Customer)</option>
+                    <option value="Company">Company (Business / Firm)</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -1011,20 +1028,23 @@ export default function CreateBillPage({ setActiveRoute }) {
               </div>
 
               <div className="space-y-4">
-                {/* Row 1: Customer Name & Mobile */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Customer / Client Name *</label>
-                    <input
-                      type="text"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      required
-                      placeholder="Enter customer / client name"
-                      className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-semibold placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                    />
-                  </div>
+                {/* Row 1: Customer / Company Name */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
+                    {customerType === 'Company' ? 'Company / Business Name *' : 'Customer / Client Name *'}
+                  </label>
+                  <input
+                    type="text"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    required
+                    placeholder={customerType === 'Company' ? 'Enter company / enterprise name' : 'Enter customer / client full name'}
+                    className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-semibold placeholder:text-gray-400 dark:placeholder:text-slate-500"
+                  />
+                </div>
 
+                {/* Row 2: Customer Phone & Email */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
                       Mobile / Phone Number <span className="text-gray-400 text-[11px] font-normal">(10 Digits)</span>
@@ -1041,10 +1061,7 @@ export default function CreateBillPage({ setActiveRoute }) {
                       className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-mono font-medium placeholder:text-gray-400 dark:placeholder:text-slate-500"
                     />
                   </div>
-                </div>
 
-                {/* Row 2: Customer Email & GSTIN */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
                       Customer Email ID <span className="text-gray-400 text-[11px] font-normal">(Optional)</span>
@@ -1057,9 +1074,14 @@ export default function CreateBillPage({ setActiveRoute }) {
                       className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-medium placeholder:text-gray-400 dark:placeholder:text-slate-500"
                     />
                   </div>
+                </div>
 
+                {/* Row 3: Customer GSTIN */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Customer GSTIN <span className="text-gray-400 text-[11px] font-normal">(Optional)</span></label>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
+                      {customerType === 'Company' ? 'Company GSTIN' : 'Customer GSTIN'} <span className="text-gray-400 text-[11px] font-normal">(Optional)</span>
+                    </label>
                     <input
                       type="text"
                       value={customerGstin}

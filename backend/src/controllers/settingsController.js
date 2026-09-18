@@ -58,11 +58,21 @@ export async function updateSettings(req, res) {
       ifsc_code,
       branch,
       bank_image_url,
+      signature_url,
       terms_conditions,
       cgst_rate,
       sgst_rate,
       igst_rate,
-      invoice_prefix
+      invoice_prefix,
+      invoice_financial_year,
+      invoice_starting_number,
+      invoice_padding_digits,
+      invoice_separator,
+      receipt_prefix,
+      receipt_financial_year,
+      receipt_starting_number,
+      receipt_padding_digits,
+      receipt_separator
     } = req.body
 
     const pool = getPool()
@@ -74,10 +84,12 @@ export async function updateSettings(req, res) {
     await pool.query(`
       INSERT INTO settings (
         id, company_name, address, phone, email, gstin,
-        bank_name, account_name, account_no, ifsc_code, branch, bank_image_url,
-        terms_conditions, cgst_rate, sgst_rate, igst_rate, invoice_prefix
+        bank_name, account_name, account_no, ifsc_code, branch, bank_image_url, signature_url,
+        terms_conditions, cgst_rate, sgst_rate, igst_rate,
+        invoice_prefix, invoice_financial_year, invoice_starting_number, invoice_padding_digits, invoice_separator,
+        receipt_prefix, receipt_financial_year, receipt_starting_number, receipt_padding_digits, receipt_separator
       ) VALUES (
-        1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
       ON DUPLICATE KEY UPDATE
         company_name = VALUES(company_name),
@@ -91,11 +103,21 @@ export async function updateSettings(req, res) {
         ifsc_code = VALUES(ifsc_code),
         branch = VALUES(branch),
         bank_image_url = VALUES(bank_image_url),
+        signature_url = VALUES(signature_url),
         terms_conditions = VALUES(terms_conditions),
         cgst_rate = VALUES(cgst_rate),
         sgst_rate = VALUES(sgst_rate),
         igst_rate = VALUES(igst_rate),
         invoice_prefix = VALUES(invoice_prefix),
+        invoice_financial_year = VALUES(invoice_financial_year),
+        invoice_starting_number = VALUES(invoice_starting_number),
+        invoice_padding_digits = VALUES(invoice_padding_digits),
+        invoice_separator = VALUES(invoice_separator),
+        receipt_prefix = VALUES(receipt_prefix),
+        receipt_financial_year = VALUES(receipt_financial_year),
+        receipt_starting_number = VALUES(receipt_starting_number),
+        receipt_padding_digits = VALUES(receipt_padding_digits),
+        receipt_separator = VALUES(receipt_separator),
         updated_at = CURRENT_TIMESTAMP
     `, [
       company_name || 'SIMCHA INFO SOLUTIONS',
@@ -109,11 +131,21 @@ export async function updateSettings(req, res) {
       ifsc_code || '',
       branch || '',
       bank_image_url || null,
+      signature_url || null,
       formattedTerms,
       parseFloat(cgst_rate) || 9.00,
       parseFloat(sgst_rate) || 9.00,
       parseFloat(igst_rate) || 18.00,
-      invoice_prefix || 'INV-'
+      invoice_prefix !== undefined ? invoice_prefix : 'SIS',
+      invoice_financial_year || '2026-27',
+      parseInt(invoice_starting_number, 10) || 1,
+      parseInt(invoice_padding_digits, 10) || 4,
+      invoice_separator || '/',
+      receipt_prefix !== undefined ? receipt_prefix : 'SIS-REC',
+      receipt_financial_year || '2026-27',
+      parseInt(receipt_starting_number, 10) || 1,
+      parseInt(receipt_padding_digits, 10) || 4,
+      receipt_separator || '/'
     ])
 
     return res.status(200).json({

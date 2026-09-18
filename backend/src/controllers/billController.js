@@ -1,38 +1,43 @@
 import { getPool } from '../config/db.js'
-import { sendInvoiceEmail } from '../services/emailService.js'
+import { sendInvoiceEmail, sendReceiptEmail } from '../services/emailService.js'
 
-// Generate next formatted invoice number
+// Generate next formatted invoice number based on system settings
 export async function getNextInvoiceNumber(req, res) {
   try {
     const pool = getPool()
     
-    // Get prefix from settings
-    const [settingRows] = await pool.query('SELECT invoice_prefix FROM settings WHERE id = 1')
-    let rawPrefix = settingRows.length > 0 && settingRows[0].invoice_prefix ? settingRows[0].invoice_prefix.trim() : 'INV-2026'
-    
-    // Ensure clean prefix ending with hyphen
-    const prefix = rawPrefix.endsWith('-') ? rawPrefix : `${rawPrefix}-`
+    // Get invoice settings
+    const [settingRows] = await pool.query(`
+      SELECT invoice_prefix, invoice_financial_year, invoice_starting_number, invoice_padding_digits, invoice_separator 
+      FROM settings WHERE id = 1
+    `)
+    const s = settingRows.length > 0 ? settingRows[0] : {}
+    const prefix = (s.invoice_prefix !== undefined && s.invoice_prefix !== null && s.invoice_prefix.trim() !== '') ? s.invoice_prefix.trim() : 'SIS'
+    const fy = (s.invoice_financial_year && s.invoice_financial_year.trim()) ? s.invoice_financial_year.trim() : '2026-27'
+    const startNum = parseInt(s.invoice_starting_number, 10) || 1
+    const padding = parseInt(s.invoice_padding_digits, 10) || 4
+    const sep = (s.invoice_separator !== undefined && s.invoice_separator !== null) ? s.invoice_separator : '/'
 
-    // Extract sequence numbers from bills with clean sequential format
+    // Extract sequence numbers from existing bills
     const [rows] = await pool.query('SELECT invoice_number FROM bills')
     let maxSeq = 0
     for (const r of rows) {
       if (r.invoice_number) {
         const invStr = r.invoice_number.trim()
-        const parts = invStr.split('-')
-        const lastPart = parts[parts.length - 1]
-        const num = parseInt(lastPart, 10)
-        // If last segment is a clean sequence number (e.g. 01, 02, 1, 2 up to 9999)
-        if (!isNaN(num) && lastPart.length <= 4 && num < 10000) {
-          if (num > maxSeq) {
-            maxSeq = num
+        const match = invStr.match(/(\d+)$/)
+        if (match) {
+          const num = parseInt(match[1], 10)
+          if (!isNaN(num) && num < 100000) {
+            if (num > maxSeq) {
+              maxSeq = num
+            }
           }
         }
       }
     }
 
-    const nextNum = maxSeq + 1
-    const formattedNumber = `${prefix}${String(nextNum).padStart(2, '0')}`
+    const nextNum = maxSeq >= startNum ? maxSeq + 1 : startNum
+    const formattedNumber = `${prefix}${sep}${fy}${sep}${String(nextNum).padStart(padding, '0')}`
 
     return res.status(200).json({
       success: true,
@@ -47,15 +52,68 @@ export async function getNextInvoiceNumber(req, res) {
   }
 }
 
+// Generate next formatted receipt number based on system settings
+export async function getNextReceiptNumber(req, res) {
+  try {
+    const pool = getPool()
+    
+    // Get receipt settings
+    const [settingRows] = await pool.query(`
+      SELECT receipt_prefix, receipt_financial_year, receipt_starting_number, receipt_padding_digits, receipt_separator 
+      FROM settings WHERE id = 1
+    `)
+    const s = settingRows.length > 0 ? settingRows[0] : {}
+    const prefix = (s.receipt_prefix !== undefined && s.receipt_prefix !== null && s.receipt_prefix.trim() !== '') ? s.receipt_prefix.trim() : 'SIS-REC'
+    const fy = (s.receipt_financial_year && s.receipt_financial_year.trim()) ? s.receipt_financial_year.trim() : '2026-27'
+    const startNum = parseInt(s.receipt_starting_number, 10) || 1
+    const padding = parseInt(s.receipt_padding_digits, 10) || 4
+    const sep = (s.receipt_separator !== undefined && s.receipt_separator !== null) ? s.receipt_separator : '/'
+
+    // Extract sequence numbers from existing bills' receipt_number
+    const [rows] = await pool.query('SELECT receipt_number, invoice_number FROM bills')
+    let maxSeq = 0
+    for (const r of rows) {
+      const recStr = (r.receipt_number || '').trim()
+      if (recStr) {
+        const match = recStr.match(/(\d+)$/)
+        if (match) {
+          const num = parseInt(match[1], 10)
+          if (!isNaN(num) && num < 100000) {
+            if (num > maxSeq) {
+              maxSeq = num
+            }
+          }
+        }
+      }
+    }
+
+    const nextNum = maxSeq >= startNum ? maxSeq + 1 : startNum
+    const formattedNumber = `${prefix}${sep}${fy}${sep}${String(nextNum).padStart(padding, '0')}`
+
+    return res.status(200).json({
+      success: true,
+      nextReceiptNumber: formattedNumber
+    })
+  } catch (error) {
+    console.error('Error generating next receipt number:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to generate receipt number.'
+    })
+  }
+}
+
 // Create New Bill with Line Items
 export async function createBill(req, res) {
   try {
     const {
       invoice_number,
+      receipt_number,
       invoice_date,
       invoice_type = 'NON_GST',
       copy_type = 'ORIGINAL',
       customer_name,
+      customer_type = 'Individual',
       customer_phone,
       customer_email,
       customer_address,
@@ -72,7 +130,7 @@ export async function createBill(req, res) {
       round_off = 0,
       total_amount = 0,
       amount_in_words = '',
-      payment_mode = 'Cash',
+      payment_mode = null,
       payment_status = 'Pending',
       notes = '',
       items = []
@@ -110,22 +168,47 @@ export async function createBill(req, res) {
       })
     }
 
+    // Determine receipt_number if not provided
+    let finalReceiptNumber = (receipt_number || '').trim()
+    if (!finalReceiptNumber) {
+      const [settingRows] = await pool.query(`
+        SELECT receipt_prefix, receipt_financial_year, receipt_starting_number, receipt_padding_digits, receipt_separator 
+        FROM settings WHERE id = 1
+      `)
+      const s = settingRows.length > 0 ? settingRows[0] : {}
+      const prefix = (s.receipt_prefix !== undefined && s.receipt_prefix !== null && s.receipt_prefix.trim() !== '') ? s.receipt_prefix.trim() : 'SIS-REC'
+      const fy = (s.receipt_financial_year && s.receipt_financial_year.trim()) ? s.receipt_financial_year.trim() : '2026-27'
+      const startNum = parseInt(s.receipt_starting_number, 10) || 1
+      const padding = parseInt(s.receipt_padding_digits, 10) || 4
+      const sep = (s.receipt_separator !== undefined && s.receipt_separator !== null) ? s.receipt_separator : '/'
+
+      // Extract numeric sequence from invoice_number if available
+      const match = invoice_number.match(/(\d+)$/)
+      const seq = match ? parseInt(match[1], 10) : startNum
+      finalReceiptNumber = `${prefix}${sep}${fy}${sep}${String(seq).padStart(padding, '0')}`
+    }
+
+    // Clean payment mode (null if Select or empty)
+    const sanitizedPaymentMode = (payment_mode === 'Select' || payment_mode === '' || !payment_mode) ? null : payment_mode
+
     // Insert into bills table
     const [billResult] = await pool.query(`
       INSERT INTO bills (
-        invoice_number, invoice_date, invoice_type, copy_type,
-        customer_name, customer_phone, customer_email, customer_address, customer_gstin,
+        invoice_number, receipt_number, invoice_date, invoice_type, copy_type,
+        customer_name, customer_type, customer_phone, customer_email, customer_address, customer_gstin,
         place_of_supply, taxable_amount, cgst_rate, cgst_amount,
         sgst_rate, sgst_amount, igst_rate, igst_amount,
         total_tax, round_off, total_amount, amount_in_words,
         payment_mode, payment_status, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       invoice_number.trim(),
+      finalReceiptNumber,
       invoice_date || new Date().toISOString().split('T')[0],
       invoice_type,
       copy_type,
       customer_name.trim(),
+      customer_type || 'Individual',
       customer_phone ? customer_phone.trim() : null,
       customer_email ? customer_email.trim() : null,
       customer_address ? customer_address.trim() : null,
@@ -142,10 +225,11 @@ export async function createBill(req, res) {
       parseFloat(round_off) || 0,
       parseFloat(total_amount) || 0,
       amount_in_words || '',
-      payment_mode || 'Cash',
-      payment_status || 'Paid',
+      sanitizedPaymentMode,
+      payment_status || 'Pending',
       notes || ''
     ])
+
 
     const billId = billResult.insertId
 
@@ -463,4 +547,45 @@ export async function updateBillPayment(req, res) {
     })
   }
 }
+
+// Send Receipt Email to Customer
+export async function sendBillReceiptEmail(req, res) {
+  try {
+    const { id } = req.params
+    const { email } = req.body || {}
+
+    const pool = getPool()
+    const [bills] = await pool.query('SELECT * FROM bills WHERE id = ?', [id])
+    if (bills.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice bill record not found.'
+      })
+    }
+
+    const bill = bills[0]
+    const recipient = email || bill.customer_email
+
+    if (!recipient || !recipient.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer email address is required to dispatch the receipt.'
+      })
+    }
+
+    const result = await sendReceiptEmail(id, recipient)
+    if (!result.success) {
+      return res.status(500).json(result)
+    }
+
+    return res.status(200).json(result)
+  } catch (error) {
+    console.error('Error sending receipt email:', error)
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to dispatch receipt email.'
+    })
+  }
+}
+
 

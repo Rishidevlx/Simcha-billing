@@ -26,6 +26,7 @@ export default function DashboardPage({ setActiveRoute: setActiveRouteProp, user
       setActiveRouteProp(route)
     } else {
       const ROUTE_MAP = {
+        
         'dashboard': '/dashboard',
         'inward': '/inward',
         'inward-reports': '/inward-list',

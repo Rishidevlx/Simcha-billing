@@ -58,6 +58,7 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
     barcode: '',
     warranty: 'No Warranty',
     serial_tracking: false,
+    return_policy: false,
     status: 'Active'
   })
 
@@ -135,6 +136,7 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
           barcode: m.barcode || '',
           warranty: m.warranty || 'No Warranty',
           serial_tracking: Boolean(m.serial_tracking),
+          return_policy: Boolean(m.return_policy),
           status: m.status || 'Active'
         })
       }
@@ -205,6 +207,7 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
       barcode: '',
       warranty: 'No Warranty',
       serial_tracking: false,
+      return_policy: false,
       status: 'Active'
     })
   }
@@ -479,8 +482,8 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
                 />
               </div>
 
-              {/* Serial Number Tracking Checkbox */}
-              <div className="lg:col-span-3 pt-1">
+              {/* Checkboxes: Serial Number Tracking & Return Policy */}
+              <div className="lg:col-span-3 pt-1 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
                 <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -489,12 +492,32 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
                     onChange={(e) => setFormData(p => ({ ...p, serial_tracking: e.target.checked }))}
                     className="w-4 h-4 text-[#043486] rounded-none focus:ring-0 cursor-pointer accent-[#043486]"
                   />
-                  <span className="text-xs sm:text-sm font-semibold text-[#292424] dark:text-white">
-                    Enable Serial Number Tracking
-                  </span>
-                  <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                    (Enable unique Serial / IMEI number inputs during Inward purchase &amp; Outward billing)
-                  </span>
+                  <div>
+                    <span className="text-xs sm:text-sm font-semibold text-[#292424] dark:text-white">
+                      Enable Serial Number Tracking
+                    </span>
+                    <span className="text-[11px] text-gray-500 dark:text-slate-400 block sm:inline sm:ml-1.5">
+                      (Enable unique Serial / IMEI inputs)
+                    </span>
+                  </div>
+                </label>
+
+                <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    name="return_policy"
+                    checked={Boolean(formData.return_policy)}
+                    onChange={(e) => setFormData(p => ({ ...p, return_policy: e.target.checked }))}
+                    className="w-4 h-4 text-[#043486] rounded-none focus:ring-0 cursor-pointer accent-[#043486]"
+                  />
+                  <div>
+                    <span className="text-xs sm:text-sm font-semibold text-[#292424] dark:text-white">
+                      Enable Return Policy
+                    </span>
+                    <span className="text-[11px] text-gray-500 dark:text-slate-400 block sm:inline sm:ml-1.5">
+                      (Return policy clause will show on bill)
+                    </span>
+                  </div>
                 </label>
               </div>
 

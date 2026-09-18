@@ -873,7 +873,7 @@ export default function AllBillsPage({ setActiveRoute }) {
                       {/* Status Dropdown */}
                       <td className="py-3.5 px-3 text-center">
                         <select
-                          value={bill.payment_status || 'Paid'}
+                          value={bill.payment_status || 'Pending'}
                           onChange={(e) => handleUpdatePaymentStatus(bill.id, e.target.value)}
                           className={`px-2.5 py-1.5 text-[11px] font-bold uppercase rounded-none border focus:outline-none cursor-pointer transition-colors ${
                             bill.payment_status === 'Paid'
@@ -910,14 +910,14 @@ export default function AllBillsPage({ setActiveRoute }) {
                             <FileCheck size={15} />
                           </button>
 
-                          {/* 3. Send Receipt Email (Active ONLY when Paid, turns light red once sent) */}
+                          {/* 3. Send Receipt Email (Active ONLY when Paid, icon turns red once sent) */}
                           <button
                             onClick={() => handleSendReceiptEmail(bill)}
                             disabled={bill.payment_status !== 'Paid'}
                             className={`p-1.5 transition-colors ${
                               bill.payment_status === 'Paid'
                                 ? bill.receipt_sent
-                                  ? 'text-red-600 dark:text-red-400 bg-red-50 hover:bg-red-100 dark:bg-red-950/60 border border-red-200 dark:border-red-900 cursor-pointer shadow-2xs'
+                                  ? 'text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-slate-800 cursor-pointer'
                                   : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer'
                                 : 'text-gray-300 dark:text-slate-700 cursor-not-allowed opacity-40'
                             }`}

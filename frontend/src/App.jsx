@@ -7,6 +7,8 @@ import InwardBillPage from './pages/InwardBillPage'
 import InwardReportsPage from './pages/InwardReportsPage'
 import CreateBillPage from './pages/CreateBillPage'
 import AllBillsPage from './pages/AllBillsPage'
+import CreateServiceBillPage from './pages/CreateServiceBillPage'
+import AllServicesPage from './pages/AllServicesPage'
 import CategoriesPage from './pages/CategoriesPage'
 import AddMaterialPage from './pages/AddMaterialPage'
 import AllMaterialsPage from './pages/AllMaterialsPage'
@@ -130,6 +132,13 @@ export default function App() {
           <Route path="outward-list" element={<AllBillsPage />} />
           <Route path="all-bills" element={<Navigate to="/outward-list" replace />} />
           <Route path="bills" element={<Navigate to="/outward-list" replace />} />
+
+          {/* Service Module Routes (2 dedicated menus) */}
+          <Route path="services/new" element={<CreateServiceBillPage />} />
+          <Route path="services/list" element={<AllServicesPage />} />
+          <Route path="services" element={<Navigate to="/services/list" replace />} />
+          <Route path="service" element={<Navigate to="/services/list" replace />} />
+          <Route path="new-service" element={<Navigate to="/services/new" replace />} />
 
           {/* Category Routes */}
           <Route path="categories" element={<CategoriesPage />} />

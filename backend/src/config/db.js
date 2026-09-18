@@ -236,8 +236,18 @@ export async function initDatabase() {
           await pool.query(`ALTER TABLE settings ADD COLUMN receipt_padding_digits INT DEFAULT 4;`)
           await pool.query(`ALTER TABLE settings ADD COLUMN receipt_separator VARCHAR(10) DEFAULT '/';`)
         } catch {}
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN return_days INT DEFAULT 7;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN service_prefix VARCHAR(50) DEFAULT 'SIS-SR';`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN service_financial_year VARCHAR(20) DEFAULT '2026-27';`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN service_starting_number INT DEFAULT 1;`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN service_padding_digits INT DEFAULT 4;`)
+          await pool.query(`ALTER TABLE settings ADD COLUMN service_separator VARCHAR(10) DEFAULT '/';`)
+        } catch {}
 
-        // Ensure customer_email and customer_type columns exist in bills
+        // Ensure customer_email, customer_type, receipt_number columns exist in bills
         try {
           await pool.query(`ALTER TABLE bills ADD COLUMN customer_email VARCHAR(191) NULL AFTER customer_phone;`)
         } catch {}
@@ -246,6 +256,14 @@ export async function initDatabase() {
         } catch {}
         try {
           await pool.query(`ALTER TABLE bills ADD COLUMN receipt_number VARCHAR(100) NULL AFTER invoice_number;`)
+        } catch {}
+
+        // Ensure materials and bill_items have return_policy column
+        try {
+          await pool.query(`ALTER TABLE materials ADD COLUMN return_policy BOOLEAN DEFAULT FALSE AFTER serial_tracking;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE bill_items ADD COLUMN return_policy BOOLEAN DEFAULT FALSE AFTER tax_amount;`)
         } catch {}
 
         // Ensure payment_mode and payment_status support flexible strings and default to Pending
@@ -547,6 +565,88 @@ export async function initDatabase() {
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         `)
         console.log('✅ "inventory_serials" table ready.')
+
+        // Step 20: Create service_bills and service_bill_items tables
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS service_bills (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            service_number VARCHAR(100) UNIQUE NOT NULL,
+            receipt_number VARCHAR(100) NULL,
+            service_date DATE NOT NULL,
+            service_type ENUM('NON_GST', 'GST') DEFAULT 'NON_GST',
+            copy_type ENUM('ORIGINAL', 'DUPLICATE', 'TRIPLICATE') DEFAULT 'ORIGINAL',
+            customer_type VARCHAR(50) DEFAULT 'Individual',
+            customer_name VARCHAR(200) NOT NULL,
+            customer_phone VARCHAR(50),
+            customer_email VARCHAR(191),
+            customer_address TEXT,
+            customer_gstin VARCHAR(50),
+            place_of_supply VARCHAR(100) DEFAULT '33-Tamil Nadu',
+            taxable_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            cgst_rate DECIMAL(5, 2) DEFAULT 9.00,
+            cgst_amount DECIMAL(12, 2) DEFAULT 0.00,
+            sgst_rate DECIMAL(5, 2) DEFAULT 9.00,
+            sgst_amount DECIMAL(12, 2) DEFAULT 0.00,
+            igst_rate DECIMAL(5, 2) DEFAULT 18.00,
+            igst_amount DECIMAL(12, 2) DEFAULT 0.00,
+            total_tax DECIMAL(12, 2) DEFAULT 0.00,
+            round_off DECIMAL(8, 2) DEFAULT 0.00,
+            total_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            amount_in_words TEXT,
+            payment_mode VARCHAR(100) DEFAULT NULL,
+            service_status ENUM('Received', 'Quotation', 'Customer Approval', 'Payment Received', 'Repair In-Progress', 'Ready', 'Delivered') DEFAULT 'Received',
+            receipt_email_sent BOOLEAN DEFAULT FALSE,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+        console.log('✅ "service_bills" table ready.')
+
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS service_bill_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            service_bill_id INT NOT NULL,
+            material_id INT NULL,
+            item_name VARCHAR(255) NOT NULL,
+            product_name VARCHAR(255),
+            brand_model VARCHAR(255),
+            issue_description TEXT,
+            serial_number VARCHAR(150),
+            serial_numbers JSON,
+            has_serial BOOLEAN DEFAULT FALSE,
+            hsn_code VARCHAR(50),
+            quantity DECIMAL(10, 2) NOT NULL DEFAULT 1.00,
+            unit VARCHAR(50) DEFAULT 'NOS',
+            rate DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            tax_rate DECIMAL(5, 2) DEFAULT 18.00,
+            tax_amount DECIMAL(12, 2) DEFAULT 0.00,
+            amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            return_policy BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (service_bill_id) REFERENCES service_bills(id) ON DELETE CASCADE,
+            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `)
+
+        // Ensure service_bill_items has new columns
+        try {
+          await pool.query(`ALTER TABLE service_bill_items ADD COLUMN product_name VARCHAR(255) NULL AFTER item_name;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE service_bill_items ADD COLUMN brand_model VARCHAR(255) NULL AFTER product_name;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE service_bill_items ADD COLUMN issue_description TEXT NULL AFTER brand_model;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE service_bill_items ADD COLUMN serial_numbers JSON NULL AFTER serial_number;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE service_bill_items ADD COLUMN has_serial BOOLEAN DEFAULT FALSE AFTER serial_numbers;`)
+        } catch {}
+
+        console.log('✅ "service_bill_items" table ready.')
 
         return pool
       } catch (error) {

@@ -96,7 +96,7 @@ export default function CreateBillPage({ setActiveRoute }) {
   const [customerGstin, setCustomerGstin] = useState('')
 
   // Payment & Remarks
-  const [paymentMode, setPaymentMode] = useState('Cash')
+  const [paymentMode, setPaymentMode] = useState('')
   const [paymentStatus, setPaymentStatus] = useState('Pending')
   const [notes, setNotes] = useState('')
 
@@ -117,7 +117,8 @@ export default function CreateBillPage({ setActiveRoute }) {
       tax_rate: 18.00,
       tax_amount: 0,
       amount: 0,
-      has_serial: false
+      has_serial: false,
+      return_policy: false
     }
   ])
 
@@ -457,7 +458,8 @@ export default function CreateBillPage({ setActiveRoute }) {
           amount: parseFloat(totalAmt.toFixed(2)),
           has_serial: hasSerial,
           serial_numbers: currentSerials,
-          serial_number: currentSerials.filter(Boolean).join(', ')
+          serial_number: currentSerials.filter(Boolean).join(', '),
+          return_policy: Boolean(selectedMat.return_policy)
         }
       } else {
         updated[index] = {
@@ -473,7 +475,8 @@ export default function CreateBillPage({ setActiveRoute }) {
           tax_rate: invoiceType === 'GST' ? activeTaxRate : 0,
           tax_amount: 0,
           amount: 0,
-          has_serial: false
+          has_serial: false,
+          return_policy: false
         }
       }
       return updated
@@ -591,7 +594,8 @@ export default function CreateBillPage({ setActiveRoute }) {
         tax_rate: invoiceType === 'GST' ? activeTaxRate : 0,
         tax_amount: 0,
         amount: 0,
-        has_serial: false
+        has_serial: false,
+        return_policy: false
       }
     ])
   }
@@ -605,7 +609,8 @@ export default function CreateBillPage({ setActiveRoute }) {
       {
         ...itemToClone,
         serial_number: '',
-        serial_numbers: itemToClone.has_serial ? Array.from({ length: qtyCount }, () => '') : ['']
+        serial_numbers: itemToClone.has_serial ? Array.from({ length: qtyCount }, () => '') : [''],
+        return_policy: itemToClone.return_policy || false
       },
       ...prev.slice(index + 1)
     ])
@@ -670,8 +675,8 @@ export default function CreateBillPage({ setActiveRoute }) {
     setCustomerGstin('')
     setPlaceOfSupply('33 - Tamil Nadu')
     setNotes('')
-    setPaymentMode('Cash')
-    setPaymentStatus('Paid')
+    setPaymentMode('')
+    setPaymentStatus('Pending')
     setItems([
       {
         material_id: '',
@@ -688,7 +693,8 @@ export default function CreateBillPage({ setActiveRoute }) {
         tax_rate: invoiceType === 'GST' ? activeTaxRate : 0,
         tax_amount: 0,
         amount: 0,
-        has_serial: false
+        has_serial: false,
+        return_policy: false
       }
     ])
     fetchNextInvoiceNumber()
@@ -1028,23 +1034,22 @@ export default function CreateBillPage({ setActiveRoute }) {
               </div>
 
               <div className="space-y-4">
-                {/* Row 1: Customer / Company Name */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
-                    {customerType === 'Company' ? 'Company / Business Name *' : 'Customer / Client Name *'}
-                  </label>
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    required
-                    placeholder={customerType === 'Company' ? 'Enter company / enterprise name' : 'Enter customer / client full name'}
-                    className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-semibold placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                  />
-                </div>
-
-                {/* Row 2: Customer Phone & Email */}
+                {/* 1st row: Customer / Client Name - Mobile / Phone Number */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
+                      {customerType === 'Company' ? 'Company / Business Name *' : 'Customer / Client Name *'}
+                    </label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      required
+                      placeholder={customerType === 'Company' ? 'Enter company / enterprise name' : 'Enter customer / client full name'}
+                      className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-semibold placeholder:text-gray-400 dark:placeholder:text-slate-500"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
                       Mobile / Phone Number <span className="text-gray-400 text-[11px] font-normal">(10 Digits)</span>
@@ -1061,7 +1066,10 @@ export default function CreateBillPage({ setActiveRoute }) {
                       className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-mono font-medium placeholder:text-gray-400 dark:placeholder:text-slate-500"
                     />
                   </div>
+                </div>
 
+                {/* 2nd row: Customer Email ID (Optional) - Customer GSTIN (Optional) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
                       Customer Email ID <span className="text-gray-400 text-[11px] font-normal">(Optional)</span>
@@ -1074,10 +1082,7 @@ export default function CreateBillPage({ setActiveRoute }) {
                       className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-medium placeholder:text-gray-400 dark:placeholder:text-slate-500"
                     />
                   </div>
-                </div>
 
-                {/* Row 3: Customer GSTIN */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
                       {customerType === 'Company' ? 'Company GSTIN' : 'Customer GSTIN'} <span className="text-gray-400 text-[11px] font-normal">(Optional)</span>
@@ -1092,7 +1097,7 @@ export default function CreateBillPage({ setActiveRoute }) {
                   </div>
                 </div>
 
-                {/* Row 3: Billing Address */}
+                {/* 3rd row full: Billing Address */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Billing Address</label>
                   <textarea

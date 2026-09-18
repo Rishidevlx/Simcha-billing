@@ -38,8 +38,9 @@ function paginateReceiptItems(items) {
   return pages
 }
 
-export default function ReceiptTemplate({ bill, settings }) {
-  if (!bill) return null
+export default function ServiceReceiptTemplate({ service, bill, settings }) {
+  const data = service || bill
+  if (!data) return null
 
   // Resolve dynamic settings with fallbacks
   const companyName = settings?.company_name || 'SIMCHA INFO SOLUTIONS'
@@ -52,12 +53,12 @@ export default function ReceiptTemplate({ bill, settings }) {
     ? settings.terms_conditions
     : [
       'Warranty as per manufacturer’s norms & should be claimed directly.',
-      'Warranty claim takes 1 to 8 weeks.',
-      'Please carry receipt copy for warranty.',
-      'Goods Once Sold will not be taken back or exchanged.'
+      'Service warranty 30 days applicable on reported issues only.',
+      'Please carry service receipt copy for warranty claims.',
+      'Replaced spare parts will not be returned unless requested prior.'
     ]
 
-  const items = Array.isArray(bill.items) ? bill.items : []
+  const items = Array.isArray(data.items) ? data.items : []
   const hasReturnableItems = items.some(it => it.return_policy === true || it.return_policy === 1 || it.return_policy === '1')
   const returnDays = settings?.return_days || 7
   const returnClause = `Products eligible for return must be returned within ${returnDays} days of purchase with original invoice copy.`
@@ -65,8 +66,8 @@ export default function ReceiptTemplate({ bill, settings }) {
   const termsList = hasReturnableItems
     ? [returnClause, ...defaultTermsList.filter(t => !t.toLowerCase().includes('will not be taken back'))]
     : defaultTermsList
-  const isGstInvoice = bill.invoice_type === 'GST' || (!bill.invoice_type && parseFloat(bill.total_tax || 0) > 0)
-  const isIntraState = !bill.place_of_supply || bill.place_of_supply.includes('33') || bill.place_of_supply.toLowerCase().includes('tamil nadu')
+  const isGstInvoice = data.service_type === 'GST' || data.invoice_type === 'GST' || parseFloat(data.total_tax || 0) > 0
+  const isIntraState = !data.place_of_supply || data.place_of_supply.includes('33') || data.place_of_supply.toLowerCase().includes('tamil nadu')
 
   const totalQty = items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0)
   const totalTaxAmt = isGstInvoice ? items.reduce((sum, it) => sum + (parseFloat(it.tax_amount) || 0), 0) : 0
@@ -88,7 +89,7 @@ export default function ReceiptTemplate({ bill, settings }) {
   const paginatedPages = paginateReceiptItems(items)
 
   return (
-    <div id="receipt-printable-area" className="w-full">
+    <div id="service-receipt-printable-area" className="w-full">
       {paginatedPages.map((page) => (
         <div
           key={page.pageIndex}
@@ -111,7 +112,7 @@ export default function ReceiptTemplate({ bill, settings }) {
           {/* Page Main Content */}
           <div className="relative z-10 px-8 pt-7 flex-1 flex flex-col justify-start space-y-2">
             
-            {/* --- PAGE 1: Full Official Letterhead Header --- */}
+            {/* --- PAGE 1: Header --- */}
             {page.isFirstPage ? (
               <div className="space-y-1.5">
                 <div className="flex items-start justify-between gap-4">
@@ -144,6 +145,11 @@ export default function ReceiptTemplate({ bill, settings }) {
                       <span className="text-gray-500 font-bold font-sans text-[11px]">GSTIN: </span>
                       {companyGstin}
                     </div>
+                    <div className="mt-1">
+                      <span className="text-[9.5px] font-extrabold uppercase px-2 py-0.5 bg-[#043486]/10 text-[#043486] border border-[#043486]/20">
+                        SERVICE PAYMENT RECEIPT
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -159,7 +165,7 @@ export default function ReceiptTemplate({ bill, settings }) {
                     <div>
                       <h2 className="text-sm font-black text-[#043486] tracking-tight leading-none">{companyName}</h2>
                       <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
-                        PAYMENT RECEIPT
+                        SERVICE PAYMENT RECEIPT
                       </span>
                     </div>
                   </div>
@@ -175,7 +181,11 @@ export default function ReceiptTemplate({ bill, settings }) {
             <div className="bg-[#f3f4f6] border border-gray-300 px-3.5 py-1.5 flex items-center justify-between text-xs font-bold text-[#292424]">
               <div className="flex items-center gap-1.5">
                 <span className="text-gray-600 uppercase font-semibold text-[10.5px]">RECEIPT NUMBER:</span>
-                <span className="text-[#292424] font-mono text-sm font-black">{bill.receipt_number || bill.invoice_number}</span>
+                <span className="text-[#292424] font-mono text-sm font-black">{data.receipt_number || data.service_number}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-600 uppercase font-semibold text-[10.5px]">SERVICE REF:</span>
+                <span className="text-[#292424] font-mono font-bold text-xs">{data.service_number}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-gray-600 uppercase font-semibold text-[10.5px]">RECEIPT DATE:</span>
@@ -190,35 +200,35 @@ export default function ReceiptTemplate({ bill, settings }) {
                   RECEIVED FROM
                 </span>
                 <h3 className="text-[13px] font-bold text-[#292424]">
-                  {bill.customer_name}
+                  {data.customer_name}
                 </h3>
               </div>
 
-              {bill.customer_address && (
+              {data.customer_address && (
                 <p className="text-[10.5px] text-gray-700 leading-snug whitespace-pre-line mt-0.5">
-                  {bill.customer_address}
+                  {data.customer_address}
                 </p>
               )}
               <div className="space-y-0.5 pt-1 text-[10.5px] font-medium text-gray-700">
-                {bill.customer_phone && (
+                {data.customer_phone && (
                   <div>
-                    <strong>Mobile:</strong> <span className="font-mono text-[#292424]">{bill.customer_phone}</span>
+                    <strong>Mobile:</strong> <span className="font-mono text-[#292424]">{data.customer_phone}</span>
                   </div>
                 )}
-                {bill.customer_email && (
+                {data.customer_email && (
                   <div>
-                    <strong>Email:</strong> <span className="text-[#292424]">{bill.customer_email}</span>
+                    <strong>Email:</strong> <span className="text-[#292424]">{data.customer_email}</span>
                   </div>
                 )}
                 <div>
-                  <strong>Place of Supply:</strong> <span className="text-[#292424]">{bill.place_of_supply || '33-Tamil Nadu'}</span>
+                  <strong>Place of Supply:</strong> <span className="text-[#292424]">{data.place_of_supply || '33-Tamil Nadu'}</span>
                 </div>
                 <div>
-                  <strong>Customer Type:</strong> <span className="text-[#292424]">{bill.customer_type || 'Individual'}</span>
+                  <strong>Customer Type:</strong> <span className="text-[#292424]">{data.customer_type || 'Individual'}</span>
                 </div>
-                {bill.customer_gstin && (
+                {data.customer_gstin && (
                   <div>
-                    <strong>Customer GSTIN:</strong> <span className="font-mono font-bold uppercase text-[#292424]">{bill.customer_gstin}</span>
+                    <strong>Customer GSTIN:</strong> <span className="font-mono font-bold uppercase text-[#292424]">{data.customer_gstin}</span>
                   </div>
                 )}
               </div>
@@ -229,13 +239,13 @@ export default function ReceiptTemplate({ bill, settings }) {
               <table className="w-full text-left border-collapse text-[10.5px]">
                 <thead>
                   <tr className="bg-[#f3f4f6] border-b border-gray-300 text-[9.5px] font-black uppercase text-[#292424]">
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[6%]">S.NO</th>
-                    <th className="py-1.5 px-2.5 border-r border-gray-300 w-[38%]">ITEMS</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[12%]">HSN/SAC</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[10%]">QTY</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[11%]">RATE (₹)</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[11%]">TAX</th>
-                    <th className="py-1.5 px-2.5 text-right w-[12%]">AMOUNT (₹)</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[5%]">#</th>
+                    <th className="py-1.5 px-2.5 border-r border-gray-300 w-[30%]">PRODUCT &amp; MODEL</th>
+                    <th className="py-1.5 px-2.5 border-r border-gray-300 w-[27%]">REPORTED ISSUE / SERVICE</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[8%]">QTY</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[10%]">RATE (₹)</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[10%]">TAX</th>
+                    <th className="py-1.5 px-2.5 text-right w-[10%]">AMOUNT (₹)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 text-[#292424]">
@@ -246,62 +256,77 @@ export default function ReceiptTemplate({ bill, settings }) {
                       </td>
                       <td className="py-2 px-2.5 border-r border-gray-300 align-top">
                         <div className="font-bold text-[#292424]">
-                          {item.item_name || item.name}
-                          {item.unit && (
-                            <span className="text-[10.5px] font-semibold text-gray-600 ml-1">
-                              ({item.unit})
-                            </span>
-                          )}
+                          {item.product_name || item.item_name || item.name}
                         </div>
-                        {item.category_name && (
-                          <div className="text-[9.5px] text-gray-500 font-medium leading-tight">
-                            [{item.category_name}]
+                        {item.brand_model && (
+                          <div className="text-[10px] text-gray-600 font-medium">
+                            Model: {item.brand_model}
                           </div>
                         )}
                         {item.serial_number && (
-                          <div className="text-[9.5px] font-mono font-semibold text-gray-800 leading-tight mt-0.5">
-                            Serial No.: {item.serial_number}
+                          <div className="text-[9.5px] font-mono font-semibold text-[#043486] mt-0.5">
+                            S/N: {item.serial_number}
                           </div>
                         )}
                       </td>
-                      <td className="py-2 px-2 border-r border-gray-300 text-center font-mono align-top text-gray-700">
-                        {item.hsn_code || '-'}
-                      </td>
-                      <td className="py-2 px-2 border-r border-gray-300 text-center font-semibold align-top text-[#292424]">
-                        {formatQty(item.quantity)} Unit
-                      </td>
-                      <td className="py-2 px-2 border-r border-gray-300 text-right font-mono align-top text-[#292424]">
-                        ₹ {parseFloat(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-2 border-r border-gray-300 text-right font-mono align-top text-gray-700 text-[9.5px]">
-                        {isGstInvoice && parseFloat(item.tax_amount || 0) > 0 ? (
-                          <>
-                            ₹ {parseFloat(item.tax_amount || 0).toFixed(2)}
-                            {item.tax_rate ? ` (${item.tax_rate}%)` : ''}
-                          </>
-                        ) : (
-                          '₹ 0.00'
+                      <td className="py-2 px-2.5 border-r border-gray-300 align-top text-gray-800">
+                        <div>{item.issue_description || 'General Service & Repair'}</div>
+                        {item.hsn_code && (
+                          <div className="text-[9px] font-mono text-gray-500 mt-0.5">
+                            HSN/SAC: {item.hsn_code}
+                          </div>
                         )}
                       </td>
-                      <td className="py-2 px-2.5 text-right font-mono font-bold align-top text-[#292424]">
-                        ₹ {parseFloat(item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <td className="py-2 px-2 border-r border-gray-300 text-center font-bold align-top text-[#292424]">
+                        {formatQty(item.quantity)}
                       </td>
+                      <td className="py-2 px-2 border-r border-gray-300 text-right font-mono align-top text-gray-800">
+                        {parseFloat(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-2 border-r border-gray-300 text-right font-mono text-[9.5px] text-gray-600 align-top">
+                        {parseFloat(item.tax_amount || 0) > 0 ? (
+                          <>
+                            <div>₹{parseFloat(item.tax_amount).toFixed(2)}</div>
+                            <div className="text-[8.5px] text-gray-500">({item.tax_rate}%)</div>
+                          </>
+                        ) : '—'}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono font-bold align-top text-[#292424]">
+                        {parseFloat(item.amount || (parseFloat(item.quantity || 0) * parseFloat(item.rate || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Empty Spacer Rows if under 5 items on last page */}
+                  {Array.from({ length: Math.max(0, 5 - page.items.length) }).map((_, i) => (
+                    <tr key={`empty-${i}`} className="h-10">
+                      <td className="border-r border-gray-300 text-center text-transparent">&nbsp;</td>
+                      <td className="border-r border-gray-300">&nbsp;</td>
+                      <td className="border-r border-gray-300">&nbsp;</td>
+                      <td className="border-r border-gray-300">&nbsp;</td>
+                      <td className="border-r border-gray-300">&nbsp;</td>
+                      <td className="border-r border-gray-300">&nbsp;</td>
+                      <td>&nbsp;</td>
                     </tr>
                   ))}
                 </tbody>
 
-                {/* Table Subtotal Bar on Last Page */}
-                {page.showSummary && (
+                {page.isLastPage && (
                   <tfoot>
-                    <tr className="bg-[#f3f4f6] border-t border-gray-300 font-bold text-[10.5px] text-[#292424]">
-                      <td colSpan={2} className="py-1.5 px-2.5 border-r border-gray-300 uppercase text-[#292424]">SUB TOTAL</td>
-                      <td className="border-r border-gray-300" />
-                      <td className="py-1.5 px-2 border-r border-gray-300 text-center font-mono text-[#292424]">{formatQty(totalQty)} Unit</td>
-                      <td className="border-r border-gray-300" />
-                      <td className="py-1.5 px-2 border-r border-gray-300 text-right font-mono text-gray-800">
+                    <tr className="bg-[#f3f4f6] font-bold border-t border-gray-300 text-[10px] text-[#292424]">
+                      <td colSpan={3} className="py-1 px-2 border-r border-gray-300 text-right uppercase">
+                        Total Items: {items.length}
+                      </td>
+                      <td className="py-1 px-2 border-r border-gray-300 text-center font-bold font-mono">
+                        {formatQty(totalQty)}
+                      </td>
+                      <td className="py-1 px-2 border-r border-gray-300 text-right font-mono text-gray-600">
+                        —
+                      </td>
+                      <td className="py-1 px-2 border-r border-gray-300 text-right font-mono">
                         ₹ {totalTaxAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="py-1.5 px-2.5 text-right font-mono text-[#292424] font-black">
+                      <td className="py-1 px-2.5 text-right font-mono font-black text-[#292424]">
                         ₹ {totalGrossAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
@@ -310,11 +335,11 @@ export default function ReceiptTemplate({ bill, settings }) {
               </table>
             </div>
 
-            {/* --- SUMMARY SECTION (NO BANK DETAILS, NO QR CODE) --- */}
+            {/* --- SUMMARY SECTION --- */}
             {page.showSummary && (
               <div className="grid grid-cols-12 gap-6 pt-2 text-[#292424]">
 
-                {/* Left Column (6/12): Terms & Conditions Only */}
+                {/* Left Column (6/12): Terms & Payment Mode */}
                 <div className="col-span-6 space-y-2">
                   <div className="space-y-0.5 text-[9.5px]">
                     <span className="font-black text-[#292424] uppercase tracking-wider block text-[10px] mb-0.5">
@@ -328,55 +353,54 @@ export default function ReceiptTemplate({ bill, settings }) {
                   </div>
 
                   <div className="p-2.5 bg-gray-50 border border-gray-200 text-[10px] text-gray-600 rounded-none mt-3">
-                    <p><strong>Payment Mode:</strong> {bill.payment_mode || 'Cash'}</p>
-                    <p className="mt-0.5"><strong>Payment Status:</strong> <span className="font-bold text-emerald-700">PAID</span></p>
+                    <p><strong>Payment Mode:</strong> {data.payment_mode || 'Cash'}</p>
+                    <p className="mt-0.5"><strong>Service Status:</strong> <span className="font-bold text-emerald-700 uppercase">{data.service_status || 'DELIVERED'}</span></p>
                   </div>
                 </div>
 
                 {/* Right Column (6/12): Tax Breakdown, Totals & Signatory */}
                 <div className="col-span-6 flex flex-col justify-between text-[#292424] pl-2">
-                  {/* Tax Computation Table */}
                   <div className="space-y-0.5 text-[10.5px]">
                     <div className="flex justify-between text-gray-700 py-0.5">
                       <span>Taxable Amount</span>
                       <span className="font-mono font-semibold text-[#292424]">
-                        ₹ {parseFloat(bill.taxable_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹ {parseFloat(data.taxable_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
 
-                    {isGstInvoice && parseFloat(bill.total_tax || 0) > 0 && (
+                    {isGstInvoice && parseFloat(data.total_tax || 0) > 0 && (
                       <>
                         {isIntraState ? (
                           <>
                             <div className="flex justify-between text-gray-700 py-0.5 text-[10px]">
-                              <span>CGST ({bill.cgst_rate || settings?.cgst_rate || 9}%)</span>
+                              <span>CGST ({data.cgst_rate || settings?.cgst_rate || 9}%)</span>
                               <span className="font-mono text-[#292424]">
-                                ₹ {parseFloat(bill.cgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ₹ {parseFloat(data.cgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             </div>
                             <div className="flex justify-between text-gray-700 py-0.5 text-[10px]">
-                              <span>SGST ({bill.sgst_rate || settings?.sgst_rate || 9}%)</span>
+                              <span>SGST ({data.sgst_rate || settings?.sgst_rate || 9}%)</span>
                               <span className="font-mono text-[#292424]">
-                                ₹ {parseFloat(bill.sgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ₹ {parseFloat(data.sgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             </div>
                           </>
                         ) : (
                           <div className="flex justify-between text-gray-700 py-0.5 text-[10px]">
-                            <span>IGST ({bill.igst_rate || settings?.igst_rate || 18}%)</span>
+                            <span>IGST ({data.igst_rate || settings?.igst_rate || 18}%)</span>
                             <span className="font-mono text-[#292424]">
-                              ₹ {parseFloat(bill.igst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              ₹ {parseFloat(data.igst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </div>
                         )}
                       </>
                     )}
 
-                    {bill.round_off && parseFloat(bill.round_off) !== 0 && (
+                    {data.round_off && parseFloat(data.round_off) !== 0 && (
                       <div className="flex justify-between text-gray-500 py-0.5 text-[10px]">
                         <span>Round Off</span>
                         <span className="font-mono">
-                          {bill.round_off > 0 ? `+₹${bill.round_off}` : `-₹${Math.abs(bill.round_off)}`}
+                          {data.round_off > 0 ? `+₹${data.round_off}` : `-₹${Math.abs(data.round_off)}`}
                         </span>
                       </div>
                     )}
@@ -385,24 +409,23 @@ export default function ReceiptTemplate({ bill, settings }) {
                     <div className="border-t border-b border-gray-400 py-1 my-1 flex justify-between items-center text-xs font-black text-[#292424]">
                       <span className="text-xs uppercase">Total Amount Received</span>
                       <span className="text-sm font-black font-mono text-[#043486]">
-                        ₹ {parseFloat(bill.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹ {parseFloat(data.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
 
-                    {/* Amount in words */}
-                    {bill.amount_in_words && (
+                    {data.amount_in_words && (
                       <div className="text-[9.5px] text-gray-600 leading-tight pt-0.5 capitalize">
-                        <strong>Received (in words):</strong> {bill.amount_in_words}
+                        <strong>Received (in words):</strong> {data.amount_in_words}
                       </div>
                     )}
                   </div>
 
                   {/* Authorized Signatory */}
                   <div className="mt-4 text-center pt-2">
-                    {(settings?.signature_url || bill.signature_url) && (
+                    {(settings?.signature_url || data.signature_url) && (
                       <div className="flex justify-center items-center h-10 mb-1">
                         <img
-                          src={settings?.signature_url || bill.signature_url}
+                          src={settings?.signature_url || data.signature_url}
                           alt="Authorized Signature"
                           className="max-h-10 max-w-[140px] object-contain"
                         />
@@ -423,9 +446,8 @@ export default function ReceiptTemplate({ bill, settings }) {
 
           </div>
 
-          {/* --- 100% FULL-WIDTH FOOTER RIBBON (EXACT SIMCHA LETTERHEAD DESIGN) --- */}
+          {/* --- FOOTER RIBBON --- */}
           <div className="w-full bg-[#043486] text-white px-8 py-2.5 flex items-center justify-between text-[9.5px] font-medium tracking-wide z-10 shrink-0">
-            {/* Left Contact Pills */}
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-full bg-white text-[#043486] flex items-center justify-center shrink-0 shadow-xs">
@@ -441,10 +463,8 @@ export default function ReceiptTemplate({ bill, settings }) {
               </div>
             </div>
 
-            {/* Slanted Divider */}
             <div className="h-5 w-[1px] bg-blue-300/40 transform rotate-12 mx-2" />
 
-            {/* Right Location Address */}
             <div className="flex items-center gap-4 max-w-md text-right">
               <div className="flex items-center gap-2 text-left">
                 <div className="w-5 h-5 rounded-full bg-white text-[#043486] flex items-center justify-center shrink-0 shadow-xs">

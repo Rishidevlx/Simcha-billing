@@ -238,8 +238,8 @@ export async function createBill(req, res) {
       await pool.query(`
         INSERT INTO bill_items (
           bill_id, material_id, item_name, serial_number,
-          hsn_code, quantity, unit, rate, tax_rate, tax_amount, amount
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          hsn_code, quantity, unit, rate, tax_rate, tax_amount, amount, return_policy
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         billId,
         item.material_id ? parseInt(item.material_id, 10) : null,
@@ -251,7 +251,8 @@ export async function createBill(req, res) {
         parseFloat(item.rate) || 0,
         parseFloat(item.tax_rate) || 18.00,
         parseFloat(item.tax_amount) || 0,
-        parseFloat(item.amount) || 0
+        parseFloat(item.amount) || 0,
+        item.return_policy ? 1 : 0
       ])
 
       // Deduct Materials current_stock (-) and record in stock_ledger

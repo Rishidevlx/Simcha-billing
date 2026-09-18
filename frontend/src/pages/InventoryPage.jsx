@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Boxes,
   Layers,
@@ -32,6 +33,7 @@ import ListKpiCard from '../components/common/ListKpiCard'
 import ListPagePagination from '../components/common/ListPagePagination'
 
 export default function InventoryPage({ setActiveRoute }) {
+  const navigate = useNavigate()
   // Active Tab: 'overview' | 'reorder'
   const [activeTab, setActiveTab] = useState('overview')
 
@@ -428,7 +430,10 @@ export default function InventoryPage({ setActiveRoute }) {
             </button>
 
             <button
-              onClick={() => setActiveRoute && setActiveRoute('inward')}
+              onClick={() => {
+                if (setActiveRoute) setActiveRoute('inward')
+                navigate('/inward')
+              }}
               className="px-4 py-2.5 text-xs font-bold text-white bg-[#043486] hover:bg-[#0248BC] dark:bg-blue-600 dark:hover:bg-blue-500 border border-[#043486] dark:border-blue-600 rounded-none shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <PackagePlus size={15} />

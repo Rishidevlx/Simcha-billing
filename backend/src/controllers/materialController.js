@@ -23,6 +23,7 @@ export const getMaterials = async (req, res) => {
         m.barcode,
         m.warranty,
         m.serial_tracking,
+        m.return_policy,
         m.status,
         m.created_at,
         m.updated_at
@@ -98,6 +99,7 @@ export const createMaterial = async (req, res) => {
       barcode,
       warranty,
       serial_tracking = false,
+      return_policy = false,
       status = 'Active'
     } = req.body
 
@@ -114,8 +116,8 @@ export const createMaterial = async (req, res) => {
         name, code, category_id, brand, unit, description, 
         selling_price, mrp, hsn_code, tax_inclusive, 
         opening_stock, reorder_level, barcode, warranty, 
-        serial_tracking, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        serial_tracking, return_policy, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       name.trim(),
       code ? code.trim() : null,
@@ -132,6 +134,7 @@ export const createMaterial = async (req, res) => {
       barcode ? barcode.trim() : null,
       warranty ? warranty.trim() : null,
       Boolean(serial_tracking),
+      Boolean(return_policy),
       status === 'Inactive' ? 'Inactive' : 'Active'
     ])
 
@@ -169,6 +172,7 @@ export const updateMaterial = async (req, res) => {
       barcode,
       warranty,
       serial_tracking = false,
+      return_policy = false,
       status = 'Active'
     } = req.body
 
@@ -197,6 +201,7 @@ export const updateMaterial = async (req, res) => {
         barcode = ?,
         warranty = ?,
         serial_tracking = ?,
+        return_policy = ?,
         status = ?,
         updated_at = NOW()
       WHERE id = ?
@@ -216,6 +221,7 @@ export const updateMaterial = async (req, res) => {
       barcode ? barcode.trim() : null,
       warranty ? warranty.trim() : null,
       Boolean(serial_tracking),
+      Boolean(return_policy),
       status === 'Inactive' ? 'Inactive' : 'Active',
       id
     ])

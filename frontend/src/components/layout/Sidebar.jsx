@@ -8,7 +8,8 @@ import {
   Settings,
   ChevronDown,
   ChevronRight,
-  Circle
+  Circle,
+  Wrench
 } from 'lucide-react'
 import logoImg from '../../assets/Logo/Logo-bg-remove.png'
 import faviconImg from '../../assets/Logo/Favicon.jpeg'
@@ -24,6 +25,7 @@ export default function Sidebar({
   // State for open dropdown menus when expanded
   const [openMenus, setOpenMenus] = useState({
     bills: false,
+    services: true,
     materials: true,
     settings: true
   })
@@ -37,6 +39,8 @@ export default function Sidebar({
   useEffect(() => {
     if (currentPath.includes('settings')) {
       setOpenMenus(prev => ({ ...prev, settings: true }))
+    } else if (currentPath.includes('service')) {
+      setOpenMenus(prev => ({ ...prev, services: true }))
     } else if (currentPath.includes('material')) {
       setOpenMenus(prev => ({ ...prev, materials: true }))
     } else if (
@@ -74,6 +78,15 @@ export default function Sidebar({
         { id: 'inward-reports', title: 'Inward List', path: '/inward-list' },
         { id: 'create-bill', title: 'Outward', path: '/outward' },
         { id: 'all-bills', title: 'Outward List', path: '/outward-list' }
+      ]
+    },
+    {
+      id: 'services',
+      title: 'Services',
+      icon: Wrench,
+      subItems: [
+        { id: 'new-service', title: 'New Request', path: '/services/new' },
+        { id: 'all-services', title: 'Service List', path: '/services/list' }
       ]
     },
     {
@@ -117,6 +130,8 @@ export default function Sidebar({
     if (sub.id === 'inward-reports' && (currentPath === '/inward-reports' || currentPath === '/inward-list')) return true
     if (sub.id === 'create-bill' && (currentPath === '/create-bill' || currentPath === '/outward')) return true
     if (sub.id === 'all-bills' && (currentPath === '/all-bills' || currentPath === '/outward-list' || currentPath === '/bills')) return true
+    if (sub.id === 'new-service' && (currentPath === '/new-service' || currentPath === '/services/new' || currentPath === '/service/new')) return true
+    if (sub.id === 'all-services' && (currentPath === '/all-services' || currentPath === '/services/list' || currentPath === '/services' || currentPath === '/service')) return true
     if (sub.id === 'all-materials' && (currentPath === '/all-materials' || currentPath === '/materials')) return true
     if (sub.id === 'add-material' && (currentPath === '/add-material' || currentPath === '/materials/add')) return true
     if (sub.id === 'profile-settings' && (currentPath === '/profile-settings' || currentPath === '/settings/profile' || currentPath === '/profile')) return true

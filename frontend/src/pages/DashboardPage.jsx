@@ -280,16 +280,11 @@ export default function DashboardPage({ setActiveRoute: setActiveRouteProp }) {
       {/* 1. Executive Header & Live System Status */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-none border border-gray-200 dark:border-slate-800 shadow-sm transition-colors">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-[#292424] dark:text-white uppercase">
-              Executive Dashboard
-            </h1>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-[#043486]/10 dark:bg-blue-900/40 text-[#043486] dark:text-blue-300 border border-[#043486]/20">
-              Live Intelligence
-            </span>
-          </div>
+          <h1 className="text-xl font-bold tracking-tight text-[#292424] dark:text-white uppercase">
+            Executive Dashboard
+          </h1>
           <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-            Real-time outward sales, inward purchases, inventory movements, and GST financial overview.
+            Real-time sales, inventory, and GST overview.
           </p>
         </div>
 
@@ -607,7 +602,7 @@ export default function DashboardPage({ setActiveRoute: setActiveRouteProp }) {
                     ))}
                   </Pie>
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '0px', fontSize: '11px' }}
+                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '0px', fontSize: '11px' , marginTop: '120px'}}
                     formatter={(val, name) => [`${val} Invoices`, name]}
                   />
                 </PieChart>

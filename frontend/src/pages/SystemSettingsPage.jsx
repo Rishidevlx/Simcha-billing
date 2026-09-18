@@ -61,6 +61,13 @@ export default function SystemSettingsPage() {
   const [receiptPaddingDigits, setReceiptPaddingDigits] = useState('4')
   const [receiptSeparator, setReceiptSeparator] = useState('/')
 
+  // Dynamic Service Numbering Settings
+  const [servicePrefix, setServicePrefix] = useState('SIS-SR')
+  const [serviceFinancialYear, setServiceFinancialYear] = useState('2026-27')
+  const [serviceStartingNumber, setServiceStartingNumber] = useState('0001')
+  const [servicePaddingDigits, setServicePaddingDigits] = useState('4')
+  const [serviceSeparator, setServiceSeparator] = useState('/')
+
   // Tax Rates
   const [cgstRate, setCgstRate] = useState('9.00')
   const [sgstRate, setSgstRate] = useState('9.00')
@@ -85,6 +92,7 @@ export default function SystemSettingsPage() {
     'Please carry invoice copy for warranty.',
     'Goods Once Sold will not be taken back or exchanged.'
   ])
+  const [returnDays, setReturnDays] = useState('7')
   const [newTermInput, setNewTermInput] = useState('')
 
   // Original snapshot for reset
@@ -130,6 +138,13 @@ export default function SystemSettingsPage() {
     setReceiptPaddingDigits(s.receipt_padding_digits !== undefined ? String(s.receipt_padding_digits) : '4')
     setReceiptSeparator(s.receipt_separator || '/')
 
+    // Service numbering
+    setServicePrefix(s.service_prefix !== undefined ? s.service_prefix : 'SIS-SR')
+    setServiceFinancialYear(s.service_financial_year || '2026-27')
+    setServiceStartingNumber(s.service_starting_number !== undefined ? String(s.service_starting_number).padStart(parseInt(s.service_padding_digits || 4, 10), '0') : '0001')
+    setServicePaddingDigits(s.service_padding_digits !== undefined ? String(s.service_padding_digits) : '4')
+    setServiceSeparator(s.service_separator || '/')
+
     setCgstRate(s.cgst_rate !== undefined ? String(s.cgst_rate) : '9.00')
     setSgstRate(s.sgst_rate !== undefined ? String(s.sgst_rate) : '9.00')
     setIgstRate(s.igst_rate !== undefined ? String(s.igst_rate) : '18.00')
@@ -140,6 +155,7 @@ export default function SystemSettingsPage() {
     setIfscCode(s.ifsc_code || '')
     setBranch(s.branch || '')
     setBankImageUrl(s.bank_image_url || '')
+    setReturnDays(s.return_days !== undefined && s.return_days !== null ? String(s.return_days) : '7')
 
     if (Array.isArray(s.terms_conditions)) {
       setTerms(s.terms_conditions)
@@ -434,6 +450,16 @@ export default function SystemSettingsPage() {
         return
       }
 
+      if (!servicePrefix.trim() || servicePrefix.trim().length > 10) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Service Prefix',
+          text: 'Service Prefix is required (maximum 10 characters).',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
       if (!invoiceFinancialYear.trim() || invoiceFinancialYear.trim().length > 7) {
         Swal.fire({
           icon: 'warning',
@@ -449,6 +475,16 @@ export default function SystemSettingsPage() {
           icon: 'warning',
           title: 'Invalid Financial Year',
           text: 'Receipt Financial Year is required (maximum 7 characters, e.g. 2026-27).',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      if (!serviceFinancialYear.trim() || serviceFinancialYear.trim().length > 7) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Financial Year',
+          text: 'Service Financial Year is required (maximum 7 characters, e.g. 2026-27).',
           confirmButtonColor: '#043486'
         })
         return
@@ -471,6 +507,17 @@ export default function SystemSettingsPage() {
           icon: 'warning',
           title: 'Invalid Starting Number',
           text: 'Receipt starting number must be between 1 and 999999.',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+
+      const srvStart = parseInt(serviceStartingNumber, 10)
+      if (isNaN(srvStart) || srvStart < 1 || srvStart > 999999) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Invalid Starting Number',
+          text: 'Service starting number must be between 1 and 999999.',
           confirmButtonColor: '#043486'
         })
         return
@@ -524,6 +571,11 @@ export default function SystemSettingsPage() {
         receipt_starting_number: parseInt(receiptStartingNumber, 10) || 1,
         receipt_padding_digits: parseInt(receiptPaddingDigits, 10) || 4,
         receipt_separator: receiptSeparator || '/',
+        service_prefix: servicePrefix.trim(),
+        service_financial_year: serviceFinancialYear.trim(),
+        service_starting_number: parseInt(serviceStartingNumber, 10) || 1,
+        service_padding_digits: parseInt(servicePaddingDigits, 10) || 4,
+        service_separator: serviceSeparator || '/',
         cgst_rate: parseFloat(cgstRate) || 9.00,
         sgst_rate: parseFloat(sgstRate) || 9.00,
         igst_rate: parseFloat(igstRate) || 18.00,
@@ -533,6 +585,7 @@ export default function SystemSettingsPage() {
         ifsc_code: ifscCode.trim(),
         branch: branch.trim(),
         bank_image_url: bankImageUrl || null,
+        return_days: parseInt(returnDays, 10) || 7,
         terms_conditions: terms.filter(t => t.trim())
       }
 
@@ -849,11 +902,11 @@ export default function SystemSettingsPage() {
               <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-800">
                 <div className="flex items-center gap-2.5">
                   <Hash size={18} className="text-[#043486] dark:text-blue-400" />
-                  <h2 className="text-base font-bold text-[#292424] dark:text-white">Bill &amp; Receipt Numbering Settings</h2>
+                  <h2 className="text-base font-bold text-[#292424] dark:text-white">Bill, Receipt &amp; Service Numbering Settings</h2>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* --- CARD 1: TAX INVOICE NUMBERING CONFIGURATION --- */}
                 <div className="bg-gray-50/50 dark:bg-slate-950/50 border border-gray-200 dark:border-slate-800 p-5 rounded-none space-y-4">
@@ -874,7 +927,7 @@ export default function SystemSettingsPage() {
                         value={invoicePrefix}
                         maxLength={10}
                         onChange={(e) => setInvoicePrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 10))}
-                        placeholder="INV"
+                        placeholder="SIS"
                         className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none uppercase transition-all ${
                           editStates.company
                             ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
@@ -944,27 +997,20 @@ export default function SystemSettingsPage() {
                   </div>
 
                   {/* Live Invoice Preview Box */}
-                  <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-3.5 space-y-2">
+                  <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-3 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                        Generated Invoice Examples:
-                      </span>
-                      <span className="text-[10px] font-mono text-gray-600 dark:text-slate-400">
-                        Format: Prefix{invoiceSeparator}FY{invoiceSeparator}Seq
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        Invoice Preview:
                       </span>
                     </div>
-                    <div className="space-y-1 font-mono text-xs font-bold text-gray-800 dark:text-slate-200">
+                    <div className="space-y-1 font-mono text-[11px] font-bold text-gray-800 dark:text-slate-200">
                       <div className="p-1.5 bg-gray-50 dark:bg-slate-800 border-l-2 border-gray-400 dark:border-slate-600 flex items-center justify-between">
-                        <span>{invoicePrefix || 'SIS'}{invoiceSeparator}{invoiceFinancialYear || '2026-27'}{invoiceSeparator}{String(parseInt(invoiceStartingNumber, 10) || 1).padStart(parseInt(invoicePaddingDigits, 10) || 4, '0')}</span>
-                        <span className="text-[10px] text-gray-400 font-sans font-normal">(1st Bill)</span>
+                        <span className="truncate">{invoicePrefix || 'SIS'}{invoiceSeparator}{invoiceFinancialYear || '2026-27'}{invoiceSeparator}{String(parseInt(invoiceStartingNumber, 10) || 1).padStart(parseInt(invoicePaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[9px] text-gray-400 font-sans font-normal ml-1 shrink-0">(1st Bill)</span>
                       </div>
                       <div className="p-1.5 bg-gray-50/60 dark:bg-slate-850 border-l-2 border-gray-300 dark:border-slate-700 flex items-center justify-between text-gray-700 dark:text-slate-300">
-                        <span>{invoicePrefix || 'SIS'}{invoiceSeparator}{invoiceFinancialYear || '2026-27'}{invoiceSeparator}{String((parseInt(invoiceStartingNumber, 10) || 1) + 1).padStart(parseInt(invoicePaddingDigits, 10) || 4, '0')}</span>
-                        <span className="text-[10px] text-gray-400 font-sans font-normal">(2nd Bill)</span>
-                      </div>
-                      <div className="p-1.5 bg-gray-50/30 dark:bg-slate-900 border-l-2 border-gray-200 dark:border-slate-800 flex items-center justify-between text-gray-500 dark:text-slate-400">
-                        <span>{invoicePrefix || 'SIS'}{invoiceSeparator}{invoiceFinancialYear || '2026-27'}{invoiceSeparator}{String((parseInt(invoiceStartingNumber, 10) || 1) + 2).padStart(parseInt(invoicePaddingDigits, 10) || 4, '0')}</span>
-                        <span className="text-[10px] text-gray-400 font-sans font-normal">(3rd Bill)</span>
+                        <span className="truncate">{invoicePrefix || 'SIS'}{invoiceSeparator}{invoiceFinancialYear || '2026-27'}{invoiceSeparator}{String((parseInt(invoiceStartingNumber, 10) || 1) + 1).padStart(parseInt(invoicePaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[9px] text-gray-400 font-sans font-normal ml-1 shrink-0">(2nd Bill)</span>
                       </div>
                     </div>
                   </div>
@@ -981,7 +1027,7 @@ export default function SystemSettingsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
                       <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
-                        Receipt Prefix *
+                        Prefix *
                       </label>
                       <input
                         type="text"
@@ -989,7 +1035,7 @@ export default function SystemSettingsPage() {
                         value={receiptPrefix}
                         maxLength={10}
                         onChange={(e) => setReceiptPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 10))}
-                        placeholder="REC"
+                        placeholder="SIS-REC"
                         className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none uppercase transition-all ${
                           editStates.company
                             ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
@@ -1059,27 +1105,128 @@ export default function SystemSettingsPage() {
                   </div>
 
                   {/* Live Receipt Preview Box */}
-                  <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-3.5 space-y-2">
+                  <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-3 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                        Generated Receipt Examples:
-                      </span>
-                      <span className="text-[10px] font-mono text-gray-600 dark:text-slate-400">
-                        Format: Prefix{receiptSeparator}FY{receiptSeparator}Seq
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        Receipt Preview:
                       </span>
                     </div>
-                    <div className="space-y-1 font-mono text-xs font-bold text-gray-800 dark:text-slate-200">
+                    <div className="space-y-1 font-mono text-[11px] font-bold text-gray-800 dark:text-slate-200">
                       <div className="p-1.5 bg-gray-50 dark:bg-slate-800 border-l-2 border-gray-400 dark:border-slate-600 flex items-center justify-between">
-                        <span>{receiptPrefix || 'SIS-REC'}{receiptSeparator}{receiptFinancialYear || '2026-27'}{receiptSeparator}{String(parseInt(receiptStartingNumber, 10) || 1).padStart(parseInt(receiptPaddingDigits, 10) || 4, '0')}</span>
-                        <span className="text-[10px] text-gray-400 font-sans font-normal">(1st Receipt)</span>
+                        <span className="truncate">{receiptPrefix || 'SIS-REC'}{receiptSeparator}{receiptFinancialYear || '2026-27'}{receiptSeparator}{String(parseInt(receiptStartingNumber, 10) || 1).padStart(parseInt(receiptPaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[9px] text-gray-400 font-sans font-normal ml-1 shrink-0">(1st Rec)</span>
                       </div>
                       <div className="p-1.5 bg-gray-50/60 dark:bg-slate-850 border-l-2 border-gray-300 dark:border-slate-700 flex items-center justify-between text-gray-700 dark:text-slate-300">
-                        <span>{receiptPrefix || 'SIS-REC'}{receiptSeparator}{receiptFinancialYear || '2026-27'}{receiptSeparator}{String((parseInt(receiptStartingNumber, 10) || 1) + 1).padStart(parseInt(receiptPaddingDigits, 10) || 4, '0')}</span>
-                        <span className="text-[10px] text-gray-400 font-sans font-normal">(2nd Receipt)</span>
+                        <span className="truncate">{receiptPrefix || 'SIS-REC'}{receiptSeparator}{receiptFinancialYear || '2026-27'}{receiptSeparator}{String((parseInt(receiptStartingNumber, 10) || 1) + 1).padStart(parseInt(receiptPaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[9px] text-gray-400 font-sans font-normal ml-1 shrink-0">(2nd Rec)</span>
                       </div>
-                      <div className="p-1.5 bg-gray-50/30 dark:bg-slate-900 border-l-2 border-gray-200 dark:border-slate-800 flex items-center justify-between text-gray-500 dark:text-slate-400">
-                        <span>{receiptPrefix || 'SIS-REC'}{receiptSeparator}{receiptFinancialYear || '2026-27'}{receiptSeparator}{String((parseInt(receiptStartingNumber, 10) || 1) + 2).padStart(parseInt(receiptPaddingDigits, 10) || 4, '0')}</span>
-                        <span className="text-[10px] text-gray-400 font-sans font-normal">(3rd Receipt)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* --- CARD 3: SERVICE TICKET & NUMBERING CONFIGURATION --- */}
+                <div className="bg-gray-50/50 dark:bg-slate-950/50 border border-gray-200 dark:border-slate-800 p-5 rounded-none space-y-4">
+                  <div className="pb-2 border-b border-gray-200 dark:border-slate-800">
+                    <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200">
+                      Service Ticket Settings
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Prefix *
+                      </label>
+                      <input
+                        type="text"
+                        disabled={!editStates.company}
+                        value={servicePrefix}
+                        maxLength={10}
+                        onChange={(e) => setServicePrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 10))}
+                        placeholder="SIS-SR"
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none uppercase transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-gray-800 dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Financial Year *
+                      </label>
+                      <input
+                        type="text"
+                        disabled={!editStates.company}
+                        value={serviceFinancialYear}
+                        maxLength={7}
+                        onChange={(e) => setServiceFinancialYear(e.target.value.replace(/[^0-9-]/g, '').slice(0, 7))}
+                        placeholder="2026-27"
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-[#292424] dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Starting Number *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="999999"
+                        disabled={!editStates.company}
+                        value={serviceStartingNumber}
+                        onChange={(e) => setServiceStartingNumber(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="1"
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-[#292424] dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Separator / Delimiter
+                      </label>
+                      <select
+                        disabled={!editStates.company}
+                        value={serviceSeparator}
+                        onChange={(e) => setServiceSeparator(e.target.value)}
+                        className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none transition-all ${
+                          editStates.company
+                            ? 'bg-white dark:bg-slate-900 text-[#292424] dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] cursor-pointer'
+                            : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                        }`}
+                      >
+                        <option value="/">Slash ( / )</option>
+                        <option value="-">Hyphen ( - )</option>
+                        <option value=".">Dot ( . )</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Live Service Preview Box */}
+                  <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                        Service Ticket Preview:
+                      </span>
+                    </div>
+                    <div className="space-y-1 font-mono text-[11px] font-bold text-gray-800 dark:text-slate-200">
+                      <div className="p-1.5 bg-gray-50 dark:bg-slate-800 border-l-2 border-gray-400 dark:border-slate-600 flex items-center justify-between">
+                        <span className="truncate">{servicePrefix || 'SIS-SR'}{serviceSeparator}{serviceFinancialYear || '2026-27'}{serviceSeparator}{String(parseInt(serviceStartingNumber, 10) || 1).padStart(parseInt(servicePaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[9px] text-gray-400 font-sans font-normal ml-1 shrink-0">(1st Ticket)</span>
+                      </div>
+                      <div className="p-1.5 bg-gray-50/60 dark:bg-slate-850 border-l-2 border-gray-300 dark:border-slate-700 flex items-center justify-between text-gray-700 dark:text-slate-300">
+                        <span className="truncate">{servicePrefix || 'SIS-SR'}{serviceSeparator}{serviceFinancialYear || '2026-27'}{serviceSeparator}{String((parseInt(serviceStartingNumber, 10) || 1) + 1).padStart(parseInt(servicePaddingDigits, 10) || 4, '0')}</span>
+                        <span className="text-[9px] text-gray-400 font-sans font-normal ml-1 shrink-0">(2nd Ticket)</span>
                       </div>
                     </div>
                   </div>
@@ -1552,6 +1699,55 @@ export default function SystemSettingsPage() {
                 <span>Click &quot;Edit Terms&quot; above to add or remove invoice clauses.</span>
               </p>
             )}
+
+            {/* Dynamic Return Policy Settings Section */}
+            <div className="pt-4 border-t border-gray-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-center gap-2">
+                <RotateCcw size={16} className="text-[#043486] dark:text-blue-400" />
+                <h3 className="text-xs sm:text-sm font-bold text-[#292424] dark:text-white uppercase tracking-wider">
+                  Material Return Policy Configuration
+                </h3>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-slate-400">
+                Configure the return window duration for returnable materials. This clause will be automatically printed on Tax Invoices and Payment Receipts <strong>only if</strong> the bill contains items marked with <em>"Enable Return Policy"</em>.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center bg-gray-50 dark:bg-slate-950 p-4 border border-gray-200 dark:border-slate-800">
+                <div className="md:col-span-1 space-y-1">
+                  <label className="block text-xs font-bold text-[#292424] dark:text-white">
+                    Return Policy Window (Days) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      max="365"
+                      disabled={!editStates.terms}
+                      value={returnDays}
+                      onChange={(e) => setReturnDays(e.target.value)}
+                      placeholder="7"
+                      className={`w-full px-3.5 py-2 text-sm font-bold rounded-none transition-all ${
+                        editStates.terms
+                          ? 'text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486] dark:focus:border-blue-500'
+                          : 'text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 cursor-not-allowed select-none'
+                      }`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">
+                      Days
+                    </span>
+                  </div>
+                </div>
+
+                <div className="md:col-span-2 space-y-1 bg-white dark:bg-slate-900 p-3 border border-blue-100 dark:border-slate-800">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#043486] dark:text-blue-400 block">
+                    Dynamic Bill Clause Preview:
+                  </span>
+                  <p className="text-xs text-gray-700 dark:text-slate-300 font-medium">
+                    &bull; Products eligible for return must be returned within <strong>{returnDays || 7} days</strong> of purchase with original invoice copy.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

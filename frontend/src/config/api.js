@@ -36,6 +36,11 @@ export const API_ENDPOINTS = {
   INVENTORY_REORDER_LEVEL: `${API_BASE_URL}/api/inventory/reorder-level`,
   INVENTORY_UPDATE_STOCK_THRESHOLD: `${API_BASE_URL}/api/inventory/update-stock-threshold`,
   INVENTORY_MATERIAL_SERIALS: (id, status) => `${API_BASE_URL}/api/inventory/serials/${id}${status ? `?status=${status}` : ''}`,
+  SERVICES: `${API_BASE_URL}/api/services`,
+  NEXT_SERVICE_NUMBER: `${API_BASE_URL}/api/services/next-number`,
+  SERVICE_BY_ID: (id) => `${API_BASE_URL}/api/services/${id}`,
+  SERVICE_STATUS_UPDATE: (id) => `${API_BASE_URL}/api/services/${id}/status`,
+  SERVICE_SEND_RECEIPT: (id) => `${API_BASE_URL}/api/services/${id}/send-receipt`,
   HEALTH: `${API_BASE_URL}/api/health`
 }
 

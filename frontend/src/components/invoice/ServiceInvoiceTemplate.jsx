@@ -38,8 +38,9 @@ function paginateInvoiceItems(items) {
   return pages
 }
 
-export default function InvoiceTemplate({ bill, settings }) {
-  if (!bill) return null
+export default function ServiceInvoiceTemplate({ service, bill, settings }) {
+  const data = service || bill
+  if (!data) return null
 
   // Resolve dynamic settings with fallbacks
   const companyName = settings?.company_name || 'SIMCHA INFO SOLUTIONS'
@@ -54,16 +55,17 @@ export default function InvoiceTemplate({ bill, settings }) {
   const bankAccountNo = settings?.account_no || '120041754011'
   const bankIfsc = settings?.ifsc_code || 'CNRB0002732'
   const bankImageUrl = settings?.bank_image_url || ''
+  
   const defaultTermsList = Array.isArray(settings?.terms_conditions) && settings.terms_conditions.length > 0
     ? settings.terms_conditions
     : [
       'Warranty as per manufacturer’s norms & should be claimed directly.',
-      'Warranty claim takes 1 to 8 weeks.',
-      'Please carry invoice copy for warranty.',
-      'Goods Once Sold will not be taken back or exchanged.'
+      'Service warranty 30 days applicable on reported issues only.',
+      'Please carry service invoice copy for warranty claims.',
+      'Replaced spare parts will not be returned unless requested prior.'
     ]
 
-  const items = Array.isArray(bill.items) ? bill.items : []
+  const items = Array.isArray(data.items) ? data.items : []
   const hasReturnableItems = items.some(it => it.return_policy === true || it.return_policy === 1 || it.return_policy === '1')
   const returnDays = settings?.return_days || 7
   const returnClause = `Products eligible for return must be returned within ${returnDays} days of purchase with original invoice copy.`
@@ -71,14 +73,14 @@ export default function InvoiceTemplate({ bill, settings }) {
   const termsList = hasReturnableItems
     ? [returnClause, ...defaultTermsList.filter(t => !t.toLowerCase().includes('will not be taken back'))]
     : defaultTermsList
-  const isGstInvoice = bill.invoice_type === 'GST' || (!bill.invoice_type && parseFloat(bill.total_tax || 0) > 0)
-  const isIntraState = !bill.place_of_supply || bill.place_of_supply.includes('33') || bill.place_of_supply.toLowerCase().includes('tamil nadu')
+  const isGstInvoice = data.service_type === 'GST' || data.invoice_type === 'GST' || parseFloat(data.total_tax || 0) > 0
+  const isIntraState = !data.place_of_supply || data.place_of_supply.includes('33') || data.place_of_supply.toLowerCase().includes('tamil nadu')
 
   const totalQty = items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0)
   const totalTaxAmt = isGstInvoice ? items.reduce((sum, it) => sum + (parseFloat(it.tax_amount) || 0), 0) : 0
   const totalGrossAmt = items.reduce((sum, it) => sum + (parseFloat(it.amount) || (parseFloat(it.quantity || 0) * parseFloat(it.rate || 0))), 0)
 
-  // Format date helper (e.g. 15 Sept 2026)
+  // Format date helper (e.g. 18 Sept 2026)
   const formatDate = (dateStr) => {
     if (!dateStr) return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     const d = new Date(dateStr)
@@ -94,7 +96,7 @@ export default function InvoiceTemplate({ bill, settings }) {
   const paginatedPages = paginateInvoiceItems(items)
 
   return (
-    <div id="invoice-printable-area" className="w-full">
+    <div id="service-invoice-printable-area" className="w-full">
       {paginatedPages.map((page) => (
         <div
           key={page.pageIndex}
@@ -114,7 +116,7 @@ export default function InvoiceTemplate({ bill, settings }) {
             />
           </div>
 
-          {/* Main Content Area: Sequential flow so summary sits directly under table */}
+          {/* Main Content Area */}
           <div className="relative z-10 px-7 pt-6 pb-2 space-y-3 flex-1">
 
             {/* --- FIXED FULL HEADER FOR ALL PAGES --- */}
@@ -149,6 +151,11 @@ export default function InvoiceTemplate({ bill, settings }) {
                     <span className="text-gray-500 font-bold font-sans text-[11px]">GSTIN: </span>
                     {companyGstin}
                   </div>
+                  <div className="mt-1">
+                    <span className="text-[9.5px] font-extrabold uppercase px-2 py-0.5 bg-[#043486]/10 text-[#043486] border border-[#043486]/20">
+                      SERVICE INVOICE
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -156,80 +163,80 @@ export default function InvoiceTemplate({ bill, settings }) {
               <div className="w-full h-[2px] bg-[#043486] mt-1.5" />
             </div>
 
-            {/* Invoice Meta Bar */}
+            {/* Service Meta Bar */}
             <div className="bg-[#f3f4f6] border border-gray-300 px-3.5 py-1.5 flex items-center justify-between text-xs font-bold text-[#292424]">
               <div className="flex items-center gap-1.5">
-                <span className="text-gray-600 uppercase font-semibold text-[10.5px]">SALES NUMBER:</span>
-                <span className="text-[#292424] font-mono text-sm font-black">{bill.invoice_number}</span>
+                <span className="text-gray-600 uppercase font-semibold text-[10.5px]">SERVICE NUMBER:</span>
+                <span className="text-[#292424] font-mono text-sm font-black">{data.service_number || data.invoice_number}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-gray-600 uppercase font-semibold text-[10.5px]">SALES DATE:</span>
-                <span className="text-[#292424] font-semibold text-[11.5px]">{formatDate(bill.invoice_date)}</span>
+                <span className="text-gray-600 uppercase font-semibold text-[10.5px]">SERVICE DATE:</span>
+                <span className="text-[#292424] font-semibold text-[11.5px]">{formatDate(data.service_date || data.invoice_date)}</span>
               </div>
             </div>
 
-            {/* Customer Bill To Details (With Copy Type on Right Side) */}
+            {/* Customer Bill To Details */}
             <div className="border border-gray-300 p-2.5 bg-white/80 text-[#292424]">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <span className="text-[9.5px] font-black text-[#292424] uppercase tracking-wider block mb-0.5">
-                    BILL TO
+                    BILL TO / CLIENT
                   </span>
                   <h3 className="text-[13px] font-bold text-[#292424]">
-                    {bill.customer_name}
+                    {data.customer_name}
                   </h3>
                 </div>
 
                 {/* Copy Type Tag */}
                 <div className="text-right shrink-0">
                   <span className="text-[9.5px] font-bold uppercase tracking-widest text-[#292424] bg-gray-100 border border-gray-300 px-2.5 py-0.5 inline-block">
-                    {bill.copy_type === 'DUPLICATE' ? 'DUPLICATE' : (bill.copy_type === 'TRIPLICATE' ? 'TRIPLICATE' : 'ORIGINAL')}
+                    {data.copy_type === 'DUPLICATE' ? 'DUPLICATE' : (data.copy_type === 'TRIPLICATE' ? 'TRIPLICATE' : 'ORIGINAL')}
                   </span>
                 </div>
               </div>
 
-              {bill.customer_address && (
+              {data.customer_address && (
                 <p className="text-[10.5px] text-gray-700 leading-snug whitespace-pre-line mt-0.5">
-                  {bill.customer_address}
+                  {data.customer_address}
                 </p>
               )}
               <div className="space-y-0.5 pt-1 text-[10.5px] font-medium text-gray-700">
-                {bill.customer_phone && (
+                {data.customer_phone && (
                   <div>
-                    <strong>Mobile:</strong> <span className="font-mono text-[#292424]">{bill.customer_phone}</span>
+                    <strong>Mobile:</strong> <span className="font-mono text-[#292424]">{data.customer_phone}</span>
                   </div>
                 )}
-                {bill.customer_email && (
+                {data.customer_email && (
                   <div>
-                    <strong>Email:</strong> <span className="text-[#292424]">{bill.customer_email}</span>
+                    <strong>Email:</strong> <span className="text-[#292424]">{data.customer_email}</span>
                   </div>
                 )}
                 <div>
-                  <strong>Place of Supply:</strong> <span className="text-[#292424]">{bill.place_of_supply || '33-Tamil Nadu'}</span>
+                  <strong>Place of Supply:</strong> <span className="text-[#292424]">{data.place_of_supply || '33-Tamil Nadu'}</span>
                 </div>
                 <div>
-                  <strong>Customer Type:</strong> <span className="text-[#292424]">{bill.customer_type || 'Individual'}</span>
+                  <strong>Customer Type:</strong> <span className="text-[#292424]">{data.customer_type || 'Individual'}</span>
                 </div>
-                {bill.customer_gstin && (
+                {data.customer_gstin && (
                   <div>
-                    <strong>Customer GSTIN:</strong> <span className="font-mono font-bold uppercase text-[#292424]">{bill.customer_gstin}</span>
+                    <strong>Customer GSTIN:</strong> <span className="font-mono font-bold uppercase text-[#292424]">{data.customer_gstin}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* --- DYNAMIC LINE ITEMS TABLE (ONLY ACTUAL ROWS) --- */}
+            {/* --- LINE ITEMS TABLE --- */}
             <div className="border border-gray-300 overflow-hidden text-[#292424]">
               <table className="w-full text-left border-collapse text-[10.5px]">
                 <thead>
                   <tr className="bg-[#f3f4f6] border-b border-gray-300 text-[9.5px] font-black uppercase text-[#292424]">
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[6%]">S.NO</th>
-                    <th className="py-1.5 px-2.5 border-r border-gray-300 w-[38%]">ITEMS</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[12%]">HSN/SAC</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[10%]">QTY</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[11%]">RATE (₹)</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[11%]">TAX</th>
-                    <th className="py-1.5 px-2.5 text-right w-[12%]">AMOUNT (₹)</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[5%]">#</th>
+                    <th className="py-1.5 px-2.5 border-r border-gray-300 w-[30%]">PRODUCT &amp; MODEL</th>
+                    <th className="py-1.5 px-2.5 border-r border-gray-300 w-[27%]">REPORTED ISSUE / SERVICE</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[8%]">QTY</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[10%]">RATE (₹)</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[10%]">TAX</th>
+                    <th className="py-1.5 px-2.5 text-right w-[10%]">AMOUNT (₹)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 text-[#292424]">
@@ -240,62 +247,77 @@ export default function InvoiceTemplate({ bill, settings }) {
                       </td>
                       <td className="py-2 px-2.5 border-r border-gray-300 align-top">
                         <div className="font-bold text-[#292424]">
-                          {item.item_name || item.name}
-                          {item.unit && (
-                            <span className="text-[10.5px] font-semibold text-gray-600 ml-1">
-                              ({item.unit})
-                            </span>
-                          )}
+                          {item.product_name || item.item_name || item.name}
                         </div>
-                        {item.category_name && (
-                          <div className="text-[9.5px] text-gray-500 font-medium">
-                            [{item.category_name}]
+                        {item.brand_model && (
+                          <div className="text-[10px] text-gray-600 font-medium">
+                            Model: {item.brand_model}
                           </div>
                         )}
                         {item.serial_number && (
-                          <div className="text-[9.5px] font-mono font-semibold text-gray-800 mt-0.5">
-                            Serial No.: {item.serial_number}
+                          <div className="text-[9.5px] font-mono font-semibold text-[#043486] mt-0.5">
+                            S/N: {item.serial_number}
                           </div>
                         )}
                       </td>
-                      <td className="py-2 px-2 border-r border-gray-300 text-center font-mono align-top text-gray-700">
-                        {item.hsn_code || '-'}
-                      </td>
-                      <td className="py-2 px-2 border-r border-gray-300 text-center font-semibold align-top text-[#292424]">
-                        {formatQty(item.quantity)} Unit
-                      </td>
-                      <td className="py-2 px-2 border-r border-gray-300 text-right font-mono align-top text-[#292424]">
-                        ₹ {parseFloat(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-2 border-r border-gray-300 text-right font-mono align-top text-gray-700 text-[9.5px]">
-                        {isGstInvoice && parseFloat(item.tax_amount || 0) > 0 ? (
-                          <>
-                            ₹ {parseFloat(item.tax_amount || 0).toFixed(2)}
-                            {item.tax_rate ? ` (${item.tax_rate}%)` : ''}
-                          </>
-                        ) : (
-                          '₹ 0.00'
+                      <td className="py-2 px-2.5 border-r border-gray-300 align-top text-gray-800">
+                        <div>{item.issue_description || 'General Service & Repair'}</div>
+                        {item.hsn_code && (
+                          <div className="text-[9px] font-mono text-gray-500 mt-0.5">
+                            HSN/SAC: {item.hsn_code}
+                          </div>
                         )}
                       </td>
-                      <td className="py-2 px-2.5 text-right font-mono font-bold align-top text-[#292424]">
-                        ₹ {parseFloat(item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <td className="py-2 px-2 border-r border-gray-300 text-center font-bold align-top text-[#292424]">
+                        {formatQty(item.quantity)}
                       </td>
+                      <td className="py-2 px-2 border-r border-gray-300 text-right font-mono align-top text-gray-800">
+                        {parseFloat(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-2 border-r border-gray-300 text-right font-mono text-[9.5px] text-gray-600 align-top">
+                        {parseFloat(item.tax_amount || 0) > 0 ? (
+                          <>
+                            <div>₹{parseFloat(item.tax_amount).toFixed(2)}</div>
+                            <div className="text-[8.5px] text-gray-500">({item.tax_rate}%)</div>
+                          </>
+                        ) : '—'}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono font-bold align-top text-[#292424]">
+                        {parseFloat(item.amount || (parseFloat(item.quantity || 0) * parseFloat(item.rate || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Empty Spacer Rows if under 5 items on last page */}
+                  {Array.from({ length: Math.max(0, 5 - page.items.length) }).map((_, i) => (
+                    <tr key={`empty-${i}`} className="h-10">
+                      <td className="border-r border-gray-300 text-center text-transparent">&nbsp;</td>
+                      <td className="border-r border-gray-300">&nbsp;</td>
+                      <td className="border-r border-gray-300">&nbsp;</td>
+                      <td className="border-r border-gray-300">&nbsp;</td>
+                      <td className="border-r border-gray-300">&nbsp;</td>
+                      <td className="border-r border-gray-300">&nbsp;</td>
+                      <td>&nbsp;</td>
                     </tr>
                   ))}
                 </tbody>
 
-                {/* Table Subtotal Bar on Last Page */}
-                {page.showSummary && (
+                {page.isLastPage && (
                   <tfoot>
-                    <tr className="bg-[#f3f4f6] border-t border-gray-300 font-bold text-[10.5px] text-[#292424]">
-                      <td colSpan={2} className="py-1.5 px-2.5 border-r border-gray-300 uppercase text-[#292424]">SUB TOTAL</td>
-                      <td className="border-r border-gray-300" />
-                      <td className="py-1.5 px-2 border-r border-gray-300 text-center font-mono text-[#292424]">{formatQty(totalQty)} Unit</td>
-                      <td className="border-r border-gray-300" />
-                      <td className="py-1.5 px-2 border-r border-gray-300 text-right font-mono text-gray-800">
+                    <tr className="bg-[#f3f4f6] font-bold border-t border-gray-300 text-[10px] text-[#292424]">
+                      <td colSpan={3} className="py-1 px-2 border-r border-gray-300 text-right uppercase">
+                        Total Items: {items.length}
+                      </td>
+                      <td className="py-1 px-2 border-r border-gray-300 text-center font-bold font-mono">
+                        {formatQty(totalQty)}
+                      </td>
+                      <td className="py-1 px-2 border-r border-gray-300 text-right font-mono text-gray-600">
+                        —
+                      </td>
+                      <td className="py-1 px-2 border-r border-gray-300 text-right font-mono">
                         ₹ {totalTaxAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="py-1.5 px-2.5 text-right font-mono text-[#292424] font-black">
+                      <td className="py-1 px-2.5 text-right font-mono font-black text-[#292424]">
                         ₹ {totalGrossAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
@@ -304,13 +326,12 @@ export default function InvoiceTemplate({ bill, settings }) {
               </table>
             </div>
 
-            {/* --- 3-COLUMN SUMMARY (DIRECTLY UNDER TABLE) --- */}
+            {/* --- 3-COLUMN SUMMARY --- */}
             {page.showSummary && (
               <div className="grid grid-cols-12 gap-4 pt-2 text-[#292424]">
 
-                {/* Left Column (5/12): Bank Details & Terms & Conditions */}
+                {/* Left Column (5/12): Bank Details & Terms */}
                 <div className="col-span-5 space-y-2.5">
-                  {/* Bank Details */}
                   <div className="space-y-0.5 text-[10.5px]">
                     <span className="font-black text-[#292424] uppercase tracking-wider block text-[10.5px] mb-0.5">
                       BANK DETAILS
@@ -324,7 +345,6 @@ export default function InvoiceTemplate({ bill, settings }) {
                     </div>
                   </div>
 
-                  {/* Terms & Conditions */}
                   <div className="space-y-0.5 text-[9.5px] pt-1">
                     <span className="font-black text-[#292424] uppercase tracking-wider block text-[10px] mb-0.5">
                       TERMS &amp; CONDITIONS
@@ -337,7 +357,7 @@ export default function InvoiceTemplate({ bill, settings }) {
                   </div>
                 </div>
 
-                {/* Center Column (3/12): Scan to Pay & Large QR (Normal color, No outer box) */}
+                {/* Center Column (3/12): Scan to Pay */}
                 <div className="col-span-3 flex flex-col items-center justify-start text-center pt-1">
                   <span className="text-[10px] font-black uppercase text-[#292424] tracking-wider mb-2">
                     SCAN TO PAY
@@ -359,64 +379,61 @@ export default function InvoiceTemplate({ bill, settings }) {
 
                 {/* Right Column (4/12): Tax Breakdown, Totals & Signatory */}
                 <div className="col-span-4 flex flex-col justify-between text-[#292424] pl-1">
-                  {/* Tax Computation Table */}
                   <div className="space-y-0.5 text-[10.5px]">
                     <div className="flex justify-between text-gray-700 py-0.5">
                       <span>Taxable Amount</span>
                       <span className="font-mono font-semibold text-[#292424]">
-                        ₹ {parseFloat(bill.taxable_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹ {parseFloat(data.taxable_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
 
-                    {isGstInvoice && parseFloat(bill.total_tax || 0) > 0 && (
+                    {isGstInvoice && parseFloat(data.total_tax || 0) > 0 && (
                       <>
                         {isIntraState ? (
                           <>
                             <div className="flex justify-between text-gray-700 py-0.5 text-[10px]">
-                              <span>CGST ({bill.cgst_rate || settings?.cgst_rate || 9}%)</span>
+                              <span>CGST ({data.cgst_rate || settings?.cgst_rate || 9}%)</span>
                               <span className="font-mono text-[#292424]">
-                                ₹ {parseFloat(bill.cgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ₹ {parseFloat(data.cgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             </div>
                             <div className="flex justify-between text-gray-700 py-0.5 text-[10px]">
-                              <span>SGST ({bill.sgst_rate || settings?.sgst_rate || 9}%)</span>
+                              <span>SGST ({data.sgst_rate || settings?.sgst_rate || 9}%)</span>
                               <span className="font-mono text-[#292424]">
-                                ₹ {parseFloat(bill.sgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ₹ {parseFloat(data.sgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             </div>
                           </>
                         ) : (
                           <div className="flex justify-between text-gray-700 py-0.5 text-[10px]">
-                            <span>IGST ({bill.igst_rate || settings?.igst_rate || 18}%)</span>
+                            <span>IGST ({data.igst_rate || settings?.igst_rate || 18}%)</span>
                             <span className="font-mono text-[#292424]">
-                              ₹ {parseFloat(bill.igst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              ₹ {parseFloat(data.igst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </div>
                         )}
                       </>
                     )}
 
-                    {bill.round_off && parseFloat(bill.round_off) !== 0 && (
+                    {data.round_off && parseFloat(data.round_off) !== 0 && (
                       <div className="flex justify-between text-gray-500 py-0.5 text-[10px]">
                         <span>Round Off</span>
-                        <span className="font-mono text-[#292424]">{bill.round_off > 0 ? `+₹${bill.round_off}` : `-₹${Math.abs(bill.round_off)}`}</span>
+                        <span className="font-mono text-[#292424]">{data.round_off > 0 ? `+₹${data.round_off}` : `-₹${Math.abs(data.round_off)}`}</span>
                       </div>
                     )}
 
-                    {/* Grand Total Row with clean line */}
                     <div className="border-t border-b border-gray-400 py-1 my-0.5 flex justify-between items-center text-xs font-black text-[#292424]">
-                      <span>Invoice Total</span>
+                      <span>Service Total</span>
                       <span className="text-sm font-mono font-black">
-                        ₹ {parseFloat(bill.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹ {parseFloat(data.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
 
-                    {/* Amount in words */}
-                    {bill.amount_in_words && (
+                    {data.amount_in_words && (
                       <div className="pt-0.5 text-[9px] text-gray-600 leading-tight">
                         <strong className="text-gray-800">In Words: </strong>
                         <span className="italic text-[#292424] font-medium capitalize">
-                          {bill.amount_in_words}
+                          {data.amount_in_words}
                         </span>
                       </div>
                     )}
@@ -424,10 +441,10 @@ export default function InvoiceTemplate({ bill, settings }) {
 
                   {/* Authorized Signatory Block */}
                   <div className="pt-2 text-center space-y-0.5">
-                    {(settings?.signature_url || bill.signature_url) && (
+                    {(settings?.signature_url || data.signature_url) && (
                       <div className="flex justify-center items-center h-10 mb-1">
                         <img
-                          src={settings?.signature_url || bill.signature_url}
+                          src={settings?.signature_url || data.signature_url}
                           alt="Authorized Signature"
                           className="max-h-10 max-w-[140px] object-contain"
                         />
@@ -446,11 +463,9 @@ export default function InvoiceTemplate({ bill, settings }) {
             )}
           </div>
 
-          {/* --- 100% FULL-WIDTH BRAND FOOTER RIBBON (EDGE TO EDGE) --- */}
+          {/* --- FOOTER RIBBON --- */}
           <div className="w-full bg-[#043486] text-white py-2.5 px-7 mt-auto z-10 shrink-0">
             <div className="flex items-center justify-between text-[10px] font-medium">
-
-              {/* Left: Phone & Email */}
               <div className="space-y-0.5 shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 rounded-full bg-white text-[#043486] flex items-center justify-center shrink-0">
@@ -466,17 +481,14 @@ export default function InvoiceTemplate({ bill, settings }) {
                 </div>
               </div>
 
-              {/* Center Slanted Divider */}
               <div className="h-7 w-[1.5px] bg-white/40 rotate-[25deg] mx-4 shrink-0" />
 
-              {/* Right: Address */}
               <div className="flex items-center gap-2 flex-1 max-w-lg">
                 <div className="w-4 h-4 rounded-full bg-white text-[#043486] flex items-center justify-center shrink-0">
                   <MapPin size={8.5} fill="#043486" />
                 </div>
                 <span className="leading-tight text-[9.5px] text-blue-100">{companyAddress}</span>
               </div>
-
             </div>
           </div>
 

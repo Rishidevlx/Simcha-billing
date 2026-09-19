@@ -3,6 +3,7 @@ import {
   getNextInvoiceNumber,
   getNextReceiptNumber,
   createBill,
+  updateBill,
   getAllBills,
   getBillById,
   deleteBill,
@@ -17,6 +18,7 @@ router.post('/', createBill)
 router.get('/meta/next-number', getNextInvoiceNumber)
 router.get('/meta/next-receipt-number', getNextReceiptNumber)
 router.get('/:id', getBillById)
+router.put('/:id', updateBill)
 router.patch('/:id/payment', updateBillPayment)
 router.put('/:id/payment', updateBillPayment)
 router.post('/:id/send-receipt', sendBillReceiptEmail)

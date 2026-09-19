@@ -432,3 +432,192 @@ export async function deleteInwardBill(req, res) {
     })
   }
 }
+
+// Update Inward Bill
+export async function updateInwardBill(req, res) {
+  try {
+    const { id } = req.params
+    const {
+      inward_date,
+      supplier_name,
+      supplier_phone,
+      supplier_email,
+      supplier_location = '33 - Tamil Nadu',
+      supplier_gstin,
+      taxable_amount = 0,
+      cgst_rate = 9.00,
+      cgst_amount = 0,
+      sgst_rate = 9.00,
+      sgst_amount = 0,
+      igst_rate = 18.00,
+      igst_amount = 0,
+      total_tax = 0,
+      total_amount = 0,
+      total_quantity = 0,
+      hardcopy_url,
+      items = []
+    } = req.body
+
+    const pool = getPool()
+
+    const [existing] = await pool.query('SELECT id, inward_number FROM inward_bills WHERE id = ?', [id])
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inward entry not found.'
+      })
+    }
+
+    const inwardNo = existing[0].inward_number
+
+    if (!supplier_name || !supplier_name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Supplier Name is required.'
+      })
+    }
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one line item is required for inward entry.'
+      })
+    }
+
+    // 1. Revert previous stock movements for this inward entry
+    const [oldItems] = await pool.query('SELECT material_id, quantity, serial_numbers FROM inward_bill_items WHERE inward_id = ?', [id])
+    for (const oldItem of oldItems) {
+      if (oldItem.material_id) {
+        try {
+          const qtyVal = parseFloat(oldItem.quantity) || 1
+          const [matRows] = await pool.query('SELECT current_stock, opening_stock FROM materials WHERE id = ?', [oldItem.material_id])
+          if (matRows.length > 0) {
+            const currentStock = parseFloat(matRows[0].current_stock ?? matRows[0].opening_stock ?? 0)
+            const newStock = Math.max(0, currentStock - qtyVal)
+            await pool.query('UPDATE materials SET current_stock = ?, updated_at = NOW() WHERE id = ?', [newStock, oldItem.material_id])
+          }
+        } catch (revertErr) {
+          console.error('Error reverting stock on inward edit:', revertErr)
+        }
+      }
+    }
+
+    // 2. Update inward_bills header
+    await pool.query(`
+      UPDATE inward_bills SET
+        inward_date = ?, supplier_name = ?, supplier_phone = ?,
+        supplier_email = ?, supplier_location = ?, supplier_gstin = ?,
+        taxable_amount = ?, cgst_rate = ?, cgst_amount = ?,
+        sgst_rate = ?, sgst_amount = ?, igst_rate = ?, igst_amount = ?,
+        total_tax = ?, total_amount = ?, total_quantity = ?,
+        total_items = ?, hardcopy_url = ?, updated_at = NOW()
+      WHERE id = ?
+    `, [
+      inward_date || new Date().toISOString().split('T')[0],
+      supplier_name.trim(),
+      supplier_phone ? supplier_phone.trim() : null,
+      supplier_email ? supplier_email.trim() : null,
+      supplier_location || '33 - Tamil Nadu',
+      supplier_gstin ? supplier_gstin.trim() : null,
+      parseFloat(taxable_amount) || 0,
+      parseFloat(cgst_rate) || 0,
+      parseFloat(cgst_amount) || 0,
+      parseFloat(sgst_rate) || 0,
+      parseFloat(sgst_amount) || 0,
+      parseFloat(igst_rate) || 0,
+      parseFloat(igst_amount) || 0,
+      parseFloat(total_tax) || 0,
+      parseFloat(total_amount) || 0,
+      parseFloat(total_quantity) || 0,
+      items.length,
+      hardcopy_url || null,
+      id
+    ])
+
+    // 3. Delete old items
+    await pool.query('DELETE FROM inward_bill_items WHERE inward_id = ?', [id])
+
+    // 4. Insert updated items & apply new stock additions
+    for (const item of items) {
+      const serials = Array.isArray(item.serial_numbers) 
+        ? item.serial_numbers.filter(s => s && s.trim() !== '') 
+        : []
+      
+      const serialJson = serials.length > 0 ? JSON.stringify(serials) : null
+      const materialId = item.material_id ? parseInt(item.material_id, 10) : null
+
+      await pool.query(`
+        INSERT INTO inward_bill_items (
+          inward_id, material_id, item_name, description,
+          hsn_code, quantity, unit, rate, amount,
+          has_serial, serial_numbers
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        id,
+        materialId,
+        item.item_name || 'Item',
+        item.description || null,
+        item.hsn_code ? item.hsn_code.trim() : null,
+        parseFloat(item.quantity) || 1,
+        item.unit || 'NOS',
+        parseFloat(item.rate) || 0,
+        parseFloat(item.amount) || 0,
+        item.has_serial ? 1 : 0,
+        serialJson
+      ])
+
+      if (materialId) {
+        try {
+          const qtyVal = parseFloat(item.quantity) || 1
+          const [matRows] = await pool.query('SELECT current_stock, opening_stock FROM materials WHERE id = ?', [materialId])
+          if (matRows.length > 0) {
+            const currentStock = parseFloat(matRows[0].current_stock ?? matRows[0].opening_stock ?? 0)
+            const newStock = currentStock + qtyVal
+            await pool.query('UPDATE materials SET current_stock = ?, updated_at = NOW() WHERE id = ?', [newStock, materialId])
+
+            await pool.query(`
+              INSERT INTO stock_ledger (
+                material_id, movement_type, reference_number,
+                quantity_change, balance_stock, notes
+              ) VALUES (?, 'INWARD_PURCHASE', ?, ?, ?, ?)
+            `, [
+              materialId,
+              inwardNo,
+              qtyVal,
+              newStock,
+              `Updated Inward Purchase #${inwardNo} (${supplier_name.trim()})`
+            ])
+          }
+        } catch (stockErr) {
+          console.error('Error updating stock on inward update:', stockErr)
+        }
+      }
+
+      if (materialId && serials.length > 0) {
+        for (const sn of serials) {
+          try {
+            await pool.query(
+              'INSERT INTO inventory_serials (material_id, serial_number, status) VALUES (?, ?, "Available") ON DUPLICATE KEY UPDATE status = "Available"',
+              [materialId, sn.trim()]
+            )
+          } catch (serialErr) {
+            console.error('Error inserting inventory serial:', serialErr)
+          }
+        }
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Inward entry #${inwardNo} updated successfully!`,
+      inwardId: id,
+      inwardNumber: inwardNo
+    })
+  } catch (error) {
+    console.error('Error updating inward bill:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update inward bill: ' + error.message
+    })
+  }
+}

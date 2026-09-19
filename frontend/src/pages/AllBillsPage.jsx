@@ -29,7 +29,8 @@ import {
   CheckSquare,
   Square,
   Send,
-  FileCheck
+  FileCheck,
+  Pencil
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Swal from 'sweetalert2'
@@ -307,7 +308,7 @@ export default function AllBillsPage({ setActiveRoute }) {
   const handleDeleteBill = async (id, invoiceNumber) => {
     const result = await Swal.fire({
       title: 'Delete Invoice?',
-      text: `Are you sure you want to delete invoice ${invoiceNumber}? This action cannot be undone.`,
+      text: `Are you sure you want to delete invoice "${invoiceNumber}"? This action cannot be undone.`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#dc2626',
@@ -320,13 +321,18 @@ export default function AllBillsPage({ setActiveRoute }) {
         const res = await fetch(API_ENDPOINTS.BILL_BY_ID(id), { method: 'DELETE' })
         const data = await res.json()
         if (data.success) {
-          Swal.fire({
+          Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2000,
+            timerProgressBar: true
+          }).fire({
             icon: 'success',
-            title: 'Deleted',
-            text: 'Invoice deleted successfully.',
-            timer: 1500,
-            showConfirmButton: false
+            title: `Invoice "${invoiceNumber}" deleted successfully`
           })
+          setBills(prev => prev.filter(b => b.id !== id))
+          setSelectedBillIds(prev => prev.filter(billId => billId !== id))
           fetchInitialData()
           if (selectedBill && selectedBill.id === id) {
             setSelectedBill(null)
@@ -382,6 +388,20 @@ export default function AllBillsPage({ setActiveRoute }) {
 
   // Inline change Payment Status
   const handleUpdatePaymentStatus = async (billId, newStatus) => {
+    const targetBill = bills.find(b => b.id === billId)
+    if (newStatus === 'Paid') {
+      const mode = targetBill?.payment_mode
+      if (!mode || mode === 'Select' || String(mode).trim() === '') {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Payment Type Required',
+          text: 'Please select a Payment Type (Cash, UPI, etc.) before changing status to PAID.',
+          confirmButtonColor: '#043486'
+        })
+        return
+      }
+    }
+
     try {
       const res = await fetch(API_ENDPOINTS.BILL_PAYMENT_UPDATE(billId), {
         method: 'PATCH',
@@ -684,8 +704,8 @@ export default function AllBillsPage({ setActiveRoute }) {
             >
               <option value="ALL">All Payment Status</option>
               <option value="Paid">Paid</option>
-              <option value="Partial">Partial</option>
               <option value="Pending">Pending</option>
+              <option value="Cancelled">Cancelled</option>
             </select>
           </div>
 
@@ -799,11 +819,19 @@ export default function AllBillsPage({ setActiveRoute }) {
               <tbody className="divide-y divide-gray-200 dark:divide-slate-800 text-xs font-medium">
                 {paginatedBills.map((bill) => {
                   const isSelected = selectedBillIds.includes(bill.id)
+                  const isPaid = bill.payment_status === 'Paid'
+                  const isCancelled = bill.payment_status === 'Cancelled' || bill.payment_status === 'Cancel'
+                  const isEditDeleteDisabled = isPaid || isCancelled
+
                   return (
                     <tr
                       key={bill.id}
-                      className={`hover:bg-blue-50/40 dark:hover:bg-slate-800/50 transition-colors ${
-                        isSelected ? 'bg-blue-50/60 dark:bg-blue-950/30' : ''
+                      className={`transition-colors ${
+                        isCancelled
+                          ? 'opacity-65 bg-gray-50/80 dark:bg-slate-900/60'
+                          : isSelected
+                          ? 'bg-blue-50/60 dark:bg-blue-950/30'
+                          : 'hover:bg-blue-50/40 dark:hover:bg-slate-800/50'
                       }`}
                     >
                       {/* Selection Checkbox */}
@@ -817,12 +845,12 @@ export default function AllBillsPage({ setActiveRoute }) {
                       </td>
 
                       {/* Invoice # */}
-                      <td className="py-3.5 px-4 font-mono font-bold text-[#043486] dark:text-blue-400">
+                      <td className={`py-3.5 px-4 font-mono font-bold text-[#043486] dark:text-blue-400 ${isCancelled ? 'line-through text-slate-500 dark:text-slate-400' : ''}`}>
                         <span>{bill.invoice_number}</span>
                       </td>
 
                       {/* Date */}
-                      <td className="py-3.5 px-4 text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                      <td className={`py-3.5 px-4 text-gray-600 dark:text-slate-400 whitespace-nowrap ${isCancelled ? 'line-through' : ''}`}>
                         {new Date(bill.invoice_date).toLocaleDateString('en-GB', {
                           day: '2-digit',
                           month: 'short',
@@ -832,11 +860,11 @@ export default function AllBillsPage({ setActiveRoute }) {
 
                       {/* Customer Name */}
                       <td className="py-3.5 px-4">
-                        <p className="font-semibold text-gray-900 dark:text-white">{bill.customer_name}</p>
+                        <p className={`font-semibold text-gray-900 dark:text-white ${isCancelled ? 'line-through text-slate-500' : ''}`}>{bill.customer_name}</p>
                       </td>
 
                       {/* Mobile Number (Dedicated Column) */}
-                      <td className="py-3.5 px-4 font-mono text-gray-600 dark:text-slate-300">
+                      <td className={`py-3.5 px-4 font-mono text-gray-600 dark:text-slate-300 ${isCancelled ? 'line-through' : ''}`}>
                         {bill.customer_phone ? (
                           <span>{bill.customer_phone}</span>
                         ) : (
@@ -845,12 +873,12 @@ export default function AllBillsPage({ setActiveRoute }) {
                       </td>
 
                       {/* Items count */}
-                      <td className="py-3.5 px-4 text-center font-mono font-semibold text-gray-700 dark:text-slate-300">
+                      <td className={`py-3.5 px-4 text-center font-mono font-semibold text-gray-700 dark:text-slate-300 ${isCancelled ? 'line-through' : ''}`}>
                         {bill.total_items || 1}
                       </td>
 
                       {/* Total Amount */}
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-[#043486] dark:text-blue-400">
+                      <td className={`py-3.5 px-4 text-right font-mono font-bold text-[#043486] dark:text-blue-400 ${isCancelled ? 'line-through text-slate-500' : ''}`}>
                         ₹ {parseFloat(bill.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
 
@@ -858,8 +886,11 @@ export default function AllBillsPage({ setActiveRoute }) {
                       <td className="py-3.5 px-3 text-center">
                         <select
                           value={bill.payment_mode || ''}
+                          disabled={isCancelled}
                           onChange={(e) => handleUpdatePaymentType(bill.id, e.target.value)}
-                          className="px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] cursor-pointer hover:border-gray-400 transition-colors"
+                          className={`px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] transition-colors ${
+                            isCancelled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-gray-400'
+                          }`}
                         >
                           <option value="">Select</option>
                           <option value="Cash">Cash</option>
@@ -876,16 +907,16 @@ export default function AllBillsPage({ setActiveRoute }) {
                           value={bill.payment_status || 'Pending'}
                           onChange={(e) => handleUpdatePaymentStatus(bill.id, e.target.value)}
                           className={`px-2.5 py-1.5 text-[11px] font-bold uppercase rounded-none border focus:outline-none cursor-pointer transition-colors ${
-                            bill.payment_status === 'Paid'
+                            isPaid
                               ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
-                              : bill.payment_status === 'Partial'
-                              ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800'
+                              : isCancelled
+                              ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-700'
                               : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-400 border-red-300 dark:border-red-800'
                           }`}
                         >
-                          <option value="Paid">Paid</option>
                           <option value="Pending">Pending</option>
-                          <option value="Partial">Partial</option>
+                          <option value="Paid">Paid</option>
+                          <option value="Cancelled">Cancel</option>
                         </select>
                       </td>
 
@@ -901,11 +932,20 @@ export default function AllBillsPage({ setActiveRoute }) {
                             <Printer size={15} />
                           </button>
 
-                          {/* 2. Direct Print Receipt */}
+                          {/* 2. Direct Print Receipt (Active ONLY when Paid) */}
                           <button
                             onClick={() => handlePrintReceipt(bill.id)}
-                            className="p-1.5 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                            title="Print / View Payment Receipt"
+                            disabled={!isPaid}
+                            className={`p-1.5 transition-colors ${
+                              isPaid
+                                ? 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-slate-800 cursor-pointer'
+                                : 'text-gray-300 dark:text-slate-700 cursor-not-allowed opacity-40'
+                            }`}
+                            title={
+                              isPaid
+                                ? 'Print / View Payment Receipt'
+                                : 'Receipt available only when status is Paid'
+                            }
                           >
                             <FileCheck size={15} />
                           </button>
@@ -913,16 +953,16 @@ export default function AllBillsPage({ setActiveRoute }) {
                           {/* 3. Send Receipt Email (Active ONLY when Paid, icon turns red once sent) */}
                           <button
                             onClick={() => handleSendReceiptEmail(bill)}
-                            disabled={bill.payment_status !== 'Paid'}
+                            disabled={!isPaid}
                             className={`p-1.5 transition-colors ${
-                              bill.payment_status === 'Paid'
+                              isPaid
                                 ? bill.receipt_sent
                                   ? 'text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-slate-800 cursor-pointer'
                                   : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer'
                                 : 'text-gray-300 dark:text-slate-700 cursor-not-allowed opacity-40'
                             }`}
                             title={
-                              bill.payment_status !== 'Paid'
+                              !isPaid
                                 ? 'Send Receipt (Available only when status is Paid)'
                                 : bill.receipt_sent
                                 ? 'Receipt Already Sent (Click for details)'
@@ -932,7 +972,27 @@ export default function AllBillsPage({ setActiveRoute }) {
                             <Send size={15} />
                           </button>
 
-                          {/* 4. View Invoice Modal / PDF */}
+                          {/* 4. Edit Invoice (Inactive if Paid or Cancelled) */}
+                          <button
+                            onClick={() => !isEditDeleteDisabled && navigate(`/outward?editId=${bill.id}`)}
+                            disabled={isEditDeleteDisabled}
+                            className={`p-1.5 rounded-none border transition-all shadow-2xs ${
+                              isEditDeleteDisabled
+                                ? 'text-gray-300 dark:text-slate-700 bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700 cursor-not-allowed opacity-30'
+                                : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-500 dark:hover:text-white border-amber-200 dark:border-amber-800 cursor-pointer'
+                            }`}
+                            title={
+                              isCancelled
+                                ? 'Cannot edit a cancelled invoice'
+                                : isPaid
+                                ? 'Cannot edit a paid invoice'
+                                : 'Edit Invoice'
+                            }
+                          >
+                            <Pencil size={15} />
+                          </button>
+
+                          {/* 5. View Invoice Modal / PDF */}
                           <button
                             onClick={() => handleViewBill(bill.id)}
                             className="p-1.5 text-[#043486] dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
@@ -941,11 +1001,22 @@ export default function AllBillsPage({ setActiveRoute }) {
                             <Eye size={15} />
                           </button>
 
-                          {/* 5. Delete Invoice */}
+                          {/* 6. Delete Invoice (Inactive if Paid or Cancelled) */}
                           <button
-                            onClick={() => handleDeleteBill(bill.id, bill.invoice_number)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
-                            title="Delete Invoice"
+                            onClick={() => !isEditDeleteDisabled && handleDeleteBill(bill.id, bill.invoice_number)}
+                            disabled={isEditDeleteDisabled}
+                            className={`p-1.5 transition-colors ${
+                              isEditDeleteDisabled
+                                ? 'text-gray-300 dark:text-slate-700 cursor-not-allowed opacity-30'
+                                : 'text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer'
+                            }`}
+                            title={
+                              isCancelled
+                                ? 'Cannot delete a cancelled invoice'
+                                : isPaid
+                                ? 'Cannot delete a paid invoice'
+                                : 'Delete Invoice'
+                            }
                           >
                             <Trash2 size={15} />
                           </button>

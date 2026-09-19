@@ -78,7 +78,8 @@ export async function updateSettings(req, res) {
       service_starting_number,
       service_padding_digits,
       service_separator,
-      return_days
+      return_days,
+      due_date_days
     } = req.body
 
     const pool = getPool()
@@ -91,12 +92,12 @@ export async function updateSettings(req, res) {
       INSERT INTO settings (
         id, company_name, address, phone, email, gstin,
         bank_name, account_name, account_no, ifsc_code, branch, bank_image_url, signature_url,
-        terms_conditions, return_days, cgst_rate, sgst_rate, igst_rate,
+        terms_conditions, return_days, due_date_days, cgst_rate, sgst_rate, igst_rate,
         invoice_prefix, invoice_financial_year, invoice_starting_number, invoice_padding_digits, invoice_separator,
         receipt_prefix, receipt_financial_year, receipt_starting_number, receipt_padding_digits, receipt_separator,
         service_prefix, service_financial_year, service_starting_number, service_padding_digits, service_separator
       ) VALUES (
-        1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
       ON DUPLICATE KEY UPDATE
         company_name = VALUES(company_name),
@@ -113,6 +114,7 @@ export async function updateSettings(req, res) {
         signature_url = VALUES(signature_url),
         terms_conditions = VALUES(terms_conditions),
         return_days = VALUES(return_days),
+        due_date_days = VALUES(due_date_days),
         cgst_rate = VALUES(cgst_rate),
         sgst_rate = VALUES(sgst_rate),
         igst_rate = VALUES(igst_rate),
@@ -147,6 +149,7 @@ export async function updateSettings(req, res) {
       signature_url || null,
       formattedTerms,
       return_days !== undefined && return_days !== null ? parseInt(return_days, 10) : 7,
+      due_date_days !== undefined && due_date_days !== null ? parseInt(due_date_days, 10) : 15,
       parseFloat(cgst_rate) || 9.00,
       parseFloat(sgst_rate) || 9.00,
       parseFloat(igst_rate) || 18.00,

@@ -93,6 +93,7 @@ export default function SystemSettingsPage() {
     'Goods Once Sold will not be taken back or exchanged.'
   ])
   const [returnDays, setReturnDays] = useState('7')
+  const [dueDateDays, setDueDateDays] = useState('15')
   const [newTermInput, setNewTermInput] = useState('')
 
   // Original snapshot for reset
@@ -156,6 +157,7 @@ export default function SystemSettingsPage() {
     setBranch(s.branch || '')
     setBankImageUrl(s.bank_image_url || '')
     setReturnDays(s.return_days !== undefined && s.return_days !== null ? String(s.return_days) : '7')
+    setDueDateDays(s.due_date_days !== undefined && s.due_date_days !== null ? String(s.due_date_days) : '15')
 
     if (Array.isArray(s.terms_conditions)) {
       setTerms(s.terms_conditions)
@@ -586,6 +588,7 @@ export default function SystemSettingsPage() {
         branch: branch.trim(),
         bank_image_url: bankImageUrl || null,
         return_days: parseInt(returnDays, 10) || 7,
+        due_date_days: parseInt(dueDateDays, 10) || 15,
         terms_conditions: terms.filter(t => t.trim())
       }
 
@@ -993,6 +996,35 @@ export default function SystemSettingsPage() {
                         <option value="-">Hyphen ( - )</option>
                         <option value=".">Dot ( . )</option>
                       </select>
+                    </div>
+
+                    {/* Dynamic Default Due Date Days Setting */}
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                        Default Invoice Due Date Period (Days) *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="365"
+                          disabled={!editStates.company}
+                          value={dueDateDays}
+                          onChange={(e) => setDueDateDays(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                          placeholder="15"
+                          className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-none transition-all ${
+                            editStates.company
+                              ? 'bg-white dark:bg-slate-900 text-[#292424] dark:text-white border border-gray-300 dark:border-slate-700 focus:outline-none focus:border-[#043486]'
+                              : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
+                          }`}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">
+                          Days
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">
+                        Outward invoices will calculate Due Date as: (Invoice Date + {dueDateDays || 15} Days).
+                      </p>
                     </div>
                   </div>
 

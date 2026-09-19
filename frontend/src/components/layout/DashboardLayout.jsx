@@ -34,6 +34,8 @@ export default function DashboardLayout({
     'add-material': '/materials/add',
     'inventory': '/inventory',
     'stock': '/inventory',
+    'returns': '/inventory/returns',
+    'returns-adjustments': '/inventory/returns',
     'profile-settings': '/settings/profile',
     'profile': '/settings/profile',
     'system-settings': '/settings/system',

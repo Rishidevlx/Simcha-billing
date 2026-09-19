@@ -18,7 +18,10 @@ export const getMaterials = async (req, res) => {
         m.mrp,
         m.hsn_code,
         m.tax_inclusive,
+        m.has_discount,
+        m.discount_percent,
         m.opening_stock,
+        COALESCE(m.current_stock, m.opening_stock, 0) AS current_stock,
         m.reorder_level,
         m.barcode,
         m.warranty,
@@ -94,6 +97,8 @@ export const createMaterial = async (req, res) => {
       mrp = 0,
       hsn_code,
       tax_inclusive = false,
+      has_discount = false,
+      discount_percent = 0,
       opening_stock = 0,
       reorder_level = 0,
       barcode,
@@ -114,10 +119,10 @@ export const createMaterial = async (req, res) => {
     const [result] = await pool.query(`
       INSERT INTO materials (
         name, code, category_id, brand, unit, description, 
-        selling_price, mrp, hsn_code, tax_inclusive, 
+        selling_price, mrp, hsn_code, tax_inclusive, has_discount, discount_percent,
         opening_stock, reorder_level, barcode, warranty, 
         serial_tracking, return_policy, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       name.trim(),
       code ? code.trim() : null,
@@ -129,6 +134,8 @@ export const createMaterial = async (req, res) => {
       parseFloat(mrp) || 0,
       hsn_code ? hsn_code.trim() : null,
       Boolean(tax_inclusive),
+      Boolean(has_discount),
+      parseFloat(discount_percent) || 0,
       parseInt(opening_stock, 10) || 0,
       parseInt(reorder_level, 10) || 0,
       barcode ? barcode.trim() : null,
@@ -167,6 +174,8 @@ export const updateMaterial = async (req, res) => {
       mrp = 0,
       hsn_code,
       tax_inclusive = false,
+      has_discount = false,
+      discount_percent = 0,
       opening_stock = 0,
       reorder_level = 0,
       barcode,
@@ -196,6 +205,8 @@ export const updateMaterial = async (req, res) => {
         mrp = ?,
         hsn_code = ?,
         tax_inclusive = ?,
+        has_discount = ?,
+        discount_percent = ?,
         opening_stock = ?,
         reorder_level = ?,
         barcode = ?,
@@ -216,6 +227,8 @@ export const updateMaterial = async (req, res) => {
       parseFloat(mrp) || 0,
       hsn_code ? hsn_code.trim() : null,
       Boolean(tax_inclusive),
+      Boolean(has_discount),
+      parseFloat(discount_percent) || 0,
       parseInt(opening_stock, 10) || 0,
       parseInt(reorder_level, 10) || 0,
       barcode ? barcode.trim() : null,

@@ -573,9 +573,14 @@ export default function AllMaterialsPage({ setActiveRoute: setActiveRouteProp, o
 
                       {/* Material Name */}
                       <td className="py-3.5 px-3.5">
-                        <span className="font-bold text-[#292424] dark:text-white text-xs sm:text-sm">
+                        <div className="font-bold text-[#292424] dark:text-white text-xs sm:text-sm">
                           {mat.name}
-                        </span>
+                        </div>
+                        {(mat.return_policy === 1 || mat.return_policy === '1' || mat.return_policy === true) && (
+                          <div className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.2 bg-blue-50 dark:bg-blue-950/60 text-[#043486] dark:text-blue-300 border border-blue-200 dark:border-blue-900 text-[10px] font-semibold tracking-wide">
+                            <span>↩ Returnable</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Category */}
@@ -649,16 +654,15 @@ export default function AllMaterialsPage({ setActiveRoute: setActiveRouteProp, o
                           <button
                             onClick={() => handleEdit(mat.id)}
                             title="Edit Material"
-                            className="p-1.5 rounded-sm text-blue-600 dark:text-blue-400 hover:text-white hover:bg-[#043486] dark:hover:bg-blue-600 border border-blue-200 dark:border-blue-800/60 transition-colors cursor-pointer"
+                            className="p-1.5 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-500 dark:hover:text-white border border-amber-200 dark:border-amber-800 rounded-none transition-all cursor-pointer shadow-2xs"
                           >
                             <Edit2 size={13} />
                           </button>
 
-
                           <button
                             onClick={() => handleDelete(mat.id, mat.name)}
                             title="Delete Material"
-                            className="p-1.5 rounded-sm text-red-600 dark:text-red-400 hover:text-white hover:bg-red-600 border border-red-200 dark:border-red-800/60 transition-colors cursor-pointer"
+                            className="p-1.5 text-red-600 dark:text-red-400 hover:text-white hover:bg-red-600 border border-red-200 dark:border-red-800/60 rounded-none transition-colors cursor-pointer"
                           >
                             <Trash2 size={13} />
                           </button>

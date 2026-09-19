@@ -110,6 +110,8 @@ export async function createBill(req, res) {
       invoice_number,
       receipt_number,
       invoice_date,
+      due_date = null,
+      has_due_date = true,
       invoice_type = 'NON_GST',
       copy_type = 'ORIGINAL',
       customer_name,
@@ -117,6 +119,8 @@ export async function createBill(req, res) {
       customer_phone,
       customer_email,
       customer_address,
+      delivery_address,
+      same_as_billing = true,
       customer_gstin,
       place_of_supply = '33-Tamil Nadu',
       taxable_amount = 0,
@@ -191,20 +195,24 @@ export async function createBill(req, res) {
     // Clean payment mode (null if Select or empty)
     const sanitizedPaymentMode = (payment_mode === 'Select' || payment_mode === '' || !payment_mode) ? null : payment_mode
 
+    const finalDeliveryAddress = same_as_billing ? (customer_address ? customer_address.trim() : null) : (delivery_address ? delivery_address.trim() : null)
+
     // Insert into bills table
     const [billResult] = await pool.query(`
       INSERT INTO bills (
-        invoice_number, receipt_number, invoice_date, invoice_type, copy_type,
-        customer_name, customer_type, customer_phone, customer_email, customer_address, customer_gstin,
+        invoice_number, receipt_number, invoice_date, due_date, has_due_date, invoice_type, copy_type,
+        customer_name, customer_type, customer_phone, customer_email, customer_address, delivery_address, same_as_billing, customer_gstin,
         place_of_supply, taxable_amount, cgst_rate, cgst_amount,
         sgst_rate, sgst_amount, igst_rate, igst_amount,
         total_tax, round_off, total_amount, amount_in_words,
         payment_mode, payment_status, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       invoice_number.trim(),
       finalReceiptNumber,
       invoice_date || new Date().toISOString().split('T')[0],
+      has_due_date ? (due_date || null) : null,
+      has_due_date ? 1 : 0,
       invoice_type,
       copy_type,
       customer_name.trim(),
@@ -212,6 +220,8 @@ export async function createBill(req, res) {
       customer_phone ? customer_phone.trim() : null,
       customer_email ? customer_email.trim() : null,
       customer_address ? customer_address.trim() : null,
+      finalDeliveryAddress,
+      same_as_billing ? 1 : 0,
       customer_gstin ? customer_gstin.trim() : null,
       place_of_supply || '33-Tamil Nadu',
       parseFloat(taxable_amount) || 0,
@@ -238,8 +248,9 @@ export async function createBill(req, res) {
       await pool.query(`
         INSERT INTO bill_items (
           bill_id, material_id, item_name, serial_number,
-          hsn_code, quantity, unit, rate, tax_rate, tax_amount, amount, return_policy
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          hsn_code, quantity, unit, rate, has_discount, discount_percent, discount_amount, original_rate,
+          tax_rate, tax_amount, amount, return_policy
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         billId,
         item.material_id ? parseInt(item.material_id, 10) : null,
@@ -249,6 +260,10 @@ export async function createBill(req, res) {
         parseFloat(item.quantity) || 1,
         item.unit || 'NOS',
         parseFloat(item.rate) || 0,
+        item.has_discount ? 1 : 0,
+        parseFloat(item.discount_percent) || 0,
+        parseFloat(item.discount_amount) || 0,
+        parseFloat(item.original_rate) || (parseFloat(item.rate) || 0),
         parseFloat(item.tax_rate) || 18.00,
         parseFloat(item.tax_amount) || 0,
         parseFloat(item.amount) || 0,
@@ -418,7 +433,21 @@ export async function getBillById(req, res) {
       })
     }
 
-    const [items] = await pool.query('SELECT * FROM bill_items WHERE bill_id = ? ORDER BY id ASC', [id])
+    const [items] = await pool.query(`
+      SELECT 
+        bi.*, 
+        m.current_stock, 
+        m.opening_stock, 
+        m.category_id,
+        m.serial_tracking, 
+        m.has_discount AS mat_has_discount, 
+        m.discount_percent AS mat_discount_percent, 
+        m.selling_price AS mat_selling_price
+      FROM bill_items bi
+      LEFT JOIN materials m ON bi.material_id = m.id
+      WHERE bi.bill_id = ?
+      ORDER BY bi.id ASC
+    `, [id])
 
     return res.status(200).json({
       success: true,
@@ -585,6 +614,232 @@ export async function sendBillReceiptEmail(req, res) {
     return res.status(500).json({
       success: false,
       message: error.message || 'Failed to dispatch receipt email.'
+    })
+  }
+}
+
+// Update Existing Bill with Line Items and Stock Reconciliation
+export async function updateBill(req, res) {
+  try {
+    const { id } = req.params
+    const pool = getPool()
+
+    const [existing] = await pool.query('SELECT * FROM bills WHERE id = ?', [id])
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bill not found.'
+      })
+    }
+
+    const {
+      invoice_number,
+      receipt_number,
+      invoice_date,
+      due_date = null,
+      has_due_date = true,
+      invoice_type = 'NON_GST',
+      copy_type = 'ORIGINAL',
+      customer_name,
+      customer_type = 'Individual',
+      customer_phone,
+      customer_email,
+      customer_address,
+      delivery_address,
+      same_as_billing = true,
+      customer_gstin,
+      place_of_supply = '33-Tamil Nadu',
+      taxable_amount = 0,
+      cgst_rate = 9.00,
+      cgst_amount = 0,
+      sgst_rate = 9.00,
+      sgst_amount = 0,
+      igst_rate = 18.00,
+      igst_amount = 0,
+      total_tax = 0,
+      round_off = 0,
+      total_amount = 0,
+      amount_in_words = '',
+      payment_mode = null,
+      payment_status = 'Pending',
+      notes = '',
+      items = []
+    } = req.body
+
+    if (!customer_name || !customer_name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer Name is required.'
+      })
+    }
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one line item is required.'
+      })
+    }
+
+    // 1. Restore previous stock for old items
+    const [oldItems] = await pool.query('SELECT material_id, quantity FROM bill_items WHERE bill_id = ?', [id])
+    for (const oldIt of oldItems) {
+      if (oldIt.material_id) {
+        try {
+          const oldQty = parseFloat(oldIt.quantity) || 0
+          const [matRows] = await pool.query('SELECT current_stock, opening_stock FROM materials WHERE id = ?', [oldIt.material_id])
+          if (matRows.length > 0) {
+            const currentStock = parseFloat(matRows[0].current_stock ?? matRows[0].opening_stock ?? 0)
+            const restoredStock = currentStock + oldQty
+            await pool.query('UPDATE materials SET current_stock = ?, updated_at = NOW() WHERE id = ?', [restoredStock, oldIt.material_id])
+          }
+        } catch (e) {
+          console.error('Error restoring stock on bill edit:', e)
+        }
+      }
+    }
+
+    // Delete old items
+    await pool.query('DELETE FROM bill_items WHERE bill_id = ?', [id])
+
+    // 2. Update bills table
+    const sanitizedPaymentMode = (payment_mode === 'Select' || payment_mode === '' || !payment_mode) ? null : payment_mode
+    const finalDeliveryAddress = same_as_billing ? (customer_address ? customer_address.trim() : null) : (delivery_address ? delivery_address.trim() : null)
+
+    await pool.query(`
+      UPDATE bills SET
+        invoice_number = ?,
+        receipt_number = ?,
+        invoice_date = ?,
+        due_date = ?,
+        has_due_date = ?,
+        invoice_type = ?,
+        copy_type = ?,
+        customer_name = ?,
+        customer_type = ?,
+        customer_phone = ?,
+        customer_email = ?,
+        customer_address = ?,
+        delivery_address = ?,
+        same_as_billing = ?,
+        customer_gstin = ?,
+        place_of_supply = ?,
+        taxable_amount = ?,
+        cgst_rate = ?,
+        cgst_amount = ?,
+        sgst_rate = ?,
+        sgst_amount = ?,
+        igst_rate = ?,
+        igst_amount = ?,
+        total_tax = ?,
+        round_off = ?,
+        total_amount = ?,
+        amount_in_words = ?,
+        payment_mode = ?,
+        payment_status = ?,
+        notes = ?,
+        updated_at = NOW()
+      WHERE id = ?
+    `, [
+      (invoice_number || existing[0].invoice_number).trim(),
+      receipt_number || existing[0].receipt_number,
+      invoice_date || existing[0].invoice_date,
+      has_due_date ? (due_date || null) : null,
+      has_due_date ? 1 : 0,
+      invoice_type,
+      copy_type,
+      customer_name.trim(),
+      customer_type || 'Individual',
+      customer_phone ? customer_phone.trim() : null,
+      customer_email ? customer_email.trim() : null,
+      customer_address ? customer_address.trim() : null,
+      finalDeliveryAddress,
+      same_as_billing ? 1 : 0,
+      customer_gstin ? customer_gstin.trim() : null,
+      place_of_supply || '33-Tamil Nadu',
+      parseFloat(taxable_amount) || 0,
+      parseFloat(cgst_rate) || 0,
+      parseFloat(cgst_amount) || 0,
+      parseFloat(sgst_rate) || 0,
+      parseFloat(sgst_amount) || 0,
+      parseFloat(igst_rate) || 0,
+      parseFloat(igst_amount) || 0,
+      parseFloat(total_tax) || 0,
+      parseFloat(round_off) || 0,
+      parseFloat(total_amount) || 0,
+      amount_in_words || '',
+      sanitizedPaymentMode,
+      payment_status || 'Pending',
+      notes || '',
+      id
+    ])
+
+    // 3. Insert updated items & deduct new stock
+    for (const item of items) {
+      await pool.query(`
+        INSERT INTO bill_items (
+          bill_id, material_id, item_name, serial_number,
+          hsn_code, quantity, unit, rate, has_discount, discount_percent, discount_amount, original_rate,
+          tax_rate, tax_amount, amount, return_policy
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        id,
+        item.material_id ? parseInt(item.material_id, 10) : null,
+        item.item_name || item.name || 'Item',
+        item.serial_number ? item.serial_number.trim() : null,
+        item.hsn_code ? item.hsn_code.trim() : null,
+        parseFloat(item.quantity) || 1,
+        item.unit || 'NOS',
+        parseFloat(item.rate) || 0,
+        item.has_discount ? 1 : 0,
+        parseFloat(item.discount_percent) || 0,
+        parseFloat(item.discount_amount) || 0,
+        parseFloat(item.original_rate) || (parseFloat(item.rate) || 0),
+        parseFloat(item.tax_rate) || 18.00,
+        parseFloat(item.tax_amount) || 0,
+        parseFloat(item.amount) || 0,
+        item.return_policy ? 1 : 0
+      ])
+
+      const materialId = item.material_id ? parseInt(item.material_id, 10) : null
+      if (materialId) {
+        try {
+          const qtyVal = parseFloat(item.quantity) || 1
+          const [matRows] = await pool.query('SELECT current_stock, opening_stock FROM materials WHERE id = ?', [materialId])
+          if (matRows.length > 0) {
+            const currentStock = parseFloat(matRows[0].current_stock ?? matRows[0].opening_stock ?? 0)
+            const newStock = Math.max(0, currentStock - qtyVal)
+            await pool.query('UPDATE materials SET current_stock = ?, updated_at = NOW() WHERE id = ?', [newStock, materialId])
+
+            await pool.query(`
+              INSERT INTO stock_ledger (
+                material_id, movement_type, reference_number,
+                quantity_change, balance_stock, notes
+              ) VALUES (?, 'OUTWARD_SALE', ?, ?, ?, ?)
+            `, [
+              materialId,
+              (invoice_number || existing[0].invoice_number).trim(),
+              -qtyVal,
+              newStock,
+              `Updated Outward Sale #${(invoice_number || existing[0].invoice_number).trim()} (${customer_name.trim()})`
+            ])
+          }
+        } catch (stockErr) {
+          console.error('Error updating stock on outward bill edit:', stockErr)
+        }
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Bill updated successfully!',
+      billId: id,
+      invoiceNumber: invoice_number || existing[0].invoice_number
+    })
+  } catch (error) {
+    console.error('Error updating bill:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update bill in database.'
     })
   }
 }

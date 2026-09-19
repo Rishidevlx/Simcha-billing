@@ -27,6 +27,7 @@ export default function Sidebar({
     bills: false,
     services: true,
     materials: true,
+    inventory: true,
     settings: true
   })
 
@@ -43,6 +44,12 @@ export default function Sidebar({
       setOpenMenus(prev => ({ ...prev, services: true }))
     } else if (currentPath.includes('material')) {
       setOpenMenus(prev => ({ ...prev, materials: true }))
+    } else if (
+      currentPath.includes('inventory') ||
+      currentPath.includes('stock') ||
+      currentPath.includes('return')
+    ) {
+      setOpenMenus(prev => ({ ...prev, inventory: true }))
     } else if (
       currentPath.includes('inward') ||
       currentPath.includes('outward') ||
@@ -109,8 +116,10 @@ export default function Sidebar({
       id: 'inventory',
       title: 'Stock & Inventory',
       icon: PackageOpen,
-      path: '/inventory',
-      single: true
+      subItems: [
+        { id: 'inventory-stock', title: 'Inventory', path: '/inventory' },
+        { id: 'returns-adjustments', title: 'Returns & Adjustments', path: '/inventory/returns' }
+      ]
     },
     {
       id: 'settings',
@@ -134,6 +143,8 @@ export default function Sidebar({
     if (sub.id === 'all-services' && (currentPath === '/all-services' || currentPath === '/services/list' || currentPath === '/services' || currentPath === '/service')) return true
     if (sub.id === 'all-materials' && (currentPath === '/all-materials' || currentPath === '/materials')) return true
     if (sub.id === 'add-material' && (currentPath === '/add-material' || currentPath === '/materials/add')) return true
+    if (sub.id === 'inventory-stock' && (currentPath === '/inventory' || currentPath === '/stock')) return true
+    if (sub.id === 'returns-adjustments' && (currentPath === '/inventory/returns' || currentPath === '/returns' || currentPath === '/returns-adjustments')) return true
     if (sub.id === 'profile-settings' && (currentPath === '/profile-settings' || currentPath === '/settings/profile' || currentPath === '/profile')) return true
     if (sub.id === 'system-settings' && (currentPath === '/system-settings' || currentPath === '/settings/system')) return true
     if (sub.id === 'configurations-settings' && (currentPath === '/configurations-settings' || currentPath === '/settings/configurations')) return true

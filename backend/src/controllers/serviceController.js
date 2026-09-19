@@ -230,6 +230,158 @@ export async function createServiceBill(req, res) {
   }
 }
 
+// Update Existing Service Request Bill & Items
+export async function updateServiceBill(req, res) {
+  try {
+    const { id } = req.params
+    const {
+      service_date,
+      service_type = 'NON_GST',
+      copy_type = 'ORIGINAL',
+      customer_name,
+      customer_type = 'Individual',
+      customer_phone,
+      customer_email,
+      customer_address,
+      customer_gstin,
+      place_of_supply = '33-Tamil Nadu',
+      taxable_amount = 0,
+      cgst_rate = 9.00,
+      cgst_amount = 0,
+      sgst_rate = 9.00,
+      sgst_amount = 0,
+      igst_rate = 18.00,
+      igst_amount = 0,
+      total_tax = 0,
+      round_off = 0,
+      total_amount = 0,
+      amount_in_words = '',
+      payment_mode = null,
+      service_status = 'Received',
+      notes = '',
+      items = []
+    } = req.body
+
+    const pool = getPool()
+
+    const [existing] = await pool.query('SELECT id, service_number FROM service_bills WHERE id = ?', [id])
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service bill not found.'
+      })
+    }
+
+    const sanitizedPaymentMode = (payment_mode === 'Select' || payment_mode === '' || !payment_mode) ? null : payment_mode
+
+    // Update service_bills master
+    await pool.query(`
+      UPDATE service_bills SET
+        service_date = ?,
+        service_type = ?,
+        copy_type = ?,
+        customer_name = ?,
+        customer_type = ?,
+        customer_phone = ?,
+        customer_email = ?,
+        customer_address = ?,
+        customer_gstin = ?,
+        place_of_supply = ?,
+        taxable_amount = ?,
+        cgst_rate = ?,
+        cgst_amount = ?,
+        sgst_rate = ?,
+        sgst_amount = ?,
+        igst_rate = ?,
+        igst_amount = ?,
+        total_tax = ?,
+        round_off = ?,
+        total_amount = ?,
+        amount_in_words = ?,
+        payment_mode = ?,
+        service_status = ?,
+        notes = ?,
+        updated_at = NOW()
+      WHERE id = ?
+    `, [
+      service_date || new Date().toISOString().split('T')[0],
+      service_type,
+      copy_type,
+      customer_name ? customer_name.trim() : '',
+      customer_type || 'Individual',
+      customer_phone ? customer_phone.trim() : null,
+      customer_email ? customer_email.trim() : null,
+      customer_address ? customer_address.trim() : null,
+      customer_gstin ? customer_gstin.trim() : null,
+      place_of_supply || '33-Tamil Nadu',
+      parseFloat(taxable_amount) || 0,
+      parseFloat(cgst_rate) || 0,
+      parseFloat(cgst_amount) || 0,
+      parseFloat(sgst_rate) || 0,
+      parseFloat(sgst_amount) || 0,
+      parseFloat(igst_rate) || 0,
+      parseFloat(igst_amount) || 0,
+      parseFloat(total_tax) || 0,
+      parseFloat(round_off) || 0,
+      parseFloat(total_amount) || 0,
+      amount_in_words || '',
+      sanitizedPaymentMode,
+      service_status || 'Received',
+      notes || '',
+      id
+    ])
+
+    // Replace items
+    await pool.query('DELETE FROM service_bill_items WHERE service_bill_id = ?', [id])
+
+    for (const item of items) {
+      const serialsArray = Array.isArray(item.serial_numbers)
+        ? item.serial_numbers.filter(s => s && s.trim())
+        : (item.serial_number ? [item.serial_number.trim()] : [])
+      const serialsStr = serialsArray.join(', ') || null
+      const serialsJson = serialsArray.length > 0 ? JSON.stringify(serialsArray) : null
+
+      await pool.query(`
+        INSERT INTO service_bill_items (
+          service_bill_id, material_id, item_name, product_name, brand_model,
+          issue_description, serial_number, serial_numbers, has_serial,
+          hsn_code, quantity, unit, rate, tax_rate, tax_amount, amount, return_policy
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        id,
+        item.material_id ? parseInt(item.material_id, 10) : null,
+        item.product_name || item.item_name || 'Service Product',
+        item.product_name ? item.product_name.trim() : (item.item_name ? item.item_name.trim() : ''),
+        item.brand_model ? item.brand_model.trim() : null,
+        item.issue_description ? item.issue_description.trim() : null,
+        serialsStr,
+        serialsJson,
+        item.has_serial ? 1 : 0,
+        item.hsn_code ? item.hsn_code.trim() : '9987',
+        parseFloat(item.quantity) || 1,
+        item.unit || 'NOS',
+        parseFloat(item.rate) || 0,
+        parseFloat(item.tax_rate) || 18.00,
+        parseFloat(item.tax_amount) || 0,
+        parseFloat(item.amount) || 0,
+        item.return_policy ? 1 : 0
+      ])
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Service request updated successfully!',
+      serviceId: id
+    })
+  } catch (error) {
+    console.error('Error updating service bill:', error)
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update service request.'
+    })
+  }
+}
+
 // Get All Service Bills with Line Items and KPI Metrics
 export async function getServiceBills(req, res) {
   try {

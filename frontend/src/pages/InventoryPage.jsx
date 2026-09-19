@@ -769,7 +769,7 @@ export default function InventoryPage({ setActiveRoute }) {
                           <div className="flex items-center justify-center gap-1.5">
                             {/* Inward Action (PackagePlus) */}
                             <button
-                              onClick={() => setActiveRoute && setActiveRoute('inward')}
+                              onClick={() => navigate('/inward')}
                               className="p-1.5 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white border border-emerald-200 dark:border-emerald-800 rounded-none transition-all cursor-pointer shadow-2xs"
                               title="Create Inward (Purchase Stock)"
                             >
@@ -778,7 +778,7 @@ export default function InventoryPage({ setActiveRoute }) {
 
                             {/* Outward Action (PackageMinus) */}
                             <button
-                              onClick={() => setActiveRoute && setActiveRoute('create-bill')}
+                              onClick={() => navigate('/outward')}
                               className="p-1.5 text-[#043486] dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 hover:bg-[#043486] hover:text-white dark:hover:bg-blue-600 dark:hover:text-white border border-blue-200 dark:border-blue-800 rounded-none transition-all cursor-pointer shadow-2xs"
                               title="Create Outward (Sales Invoice)"
                             >

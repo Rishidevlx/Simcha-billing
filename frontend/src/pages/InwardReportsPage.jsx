@@ -5,6 +5,7 @@ import {
   Search,
   Plus,
   Eye,
+  Edit2,
   Trash2,
   Calendar,
   IndianRupee,
@@ -32,7 +33,24 @@ import ListDateRangeFilter from '../components/common/ListDateRangeFilter'
 import ListPagePagination from '../components/common/ListPagePagination'
 import { API_ENDPOINTS } from '../config/api'
 
-export default function InwardReportsPage({ setActiveRoute }) {
+// Local Date Helper to eliminate timezone UTC discrepancy (e.g. 2026-09-18T18:30:00Z -> 2026-09-19 in IST)
+const getLocalDateString = (dateVal) => {
+  if (!dateVal) return ''
+  const d = new Date(dateVal)
+  if (isNaN(d.getTime())) {
+    if (typeof dateVal === 'string') {
+      const m = dateVal.match(/^(\d{4}-\d{2}-\d{2})/)
+      if (m) return m[1]
+    }
+    return ''
+  }
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export default function InwardReportsPage() {
   const navigate = useNavigate()
   const [inwards, setInwards] = useState([])
   const [stats, setStats] = useState({ totalInwards: 0, totalAmount: 0, totalItems: 0 })
@@ -48,9 +66,21 @@ export default function InwardReportsPage({ setActiveRoute }) {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
 
+  // Selected Inward IDs for Row Selection
+  const [selectedIds, setSelectedIds] = useState([])
+
   // Selected Inward for Details Modal
   const [selectedInward, setSelectedInward] = useState(null)
   const [isLoadingDetails, setIsLoadingDetails] = useState(false)
+
+  // SweetAlert Toast Notification Instance
+  const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 2000,
+    timerProgressBar: true
+  })
 
   const fetchInwardData = async () => {
     try {
@@ -87,11 +117,11 @@ export default function InwardReportsPage({ setActiveRoute }) {
     fetchInwardData()
   }, [])
 
-  // Handle Date Filter Presets
+  // Handle Date Filter Presets using Local Timezone Dates
   const handleDatePresetChange = (preset) => {
     setDatePreset(preset)
     const today = new Date()
-    const todayStr = today.toISOString().split('T')[0]
+    const todayStr = getLocalDateString(today)
 
     if (preset === 'ALL') {
       setStartDate('')
@@ -103,11 +133,11 @@ export default function InwardReportsPage({ setActiveRoute }) {
       const day = today.getDay() || 7
       const firstDay = new Date(today)
       firstDay.setDate(today.getDate() - day + 1)
-      setStartDate(firstDay.toISOString().split('T')[0])
+      setStartDate(getLocalDateString(firstDay))
       setEndDate(todayStr)
     } else if (preset === 'THIS_MONTH') {
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
-      setStartDate(firstDay)
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+      setStartDate(getLocalDateString(firstDay))
       setEndDate(todayStr)
     }
     setCurrentPage(1)
@@ -119,6 +149,7 @@ export default function InwardReportsPage({ setActiveRoute }) {
     setStartDate('')
     setEndDate('')
     setCurrentPage(1)
+    setSelectedIds([])
   }
 
   // Filtered and Searched Inwards
@@ -141,9 +172,9 @@ export default function InwardReportsPage({ setActiveRoute }) {
         if (!matchSearch) return false
       }
 
-      // 2. Date Range
+      // 2. Date Range using clean local YYYY-MM-DD
       if (startDate || endDate) {
-        const itemDate = new Date(item.inward_date).toISOString().split('T')[0]
+        const itemDate = getLocalDateString(item.inward_date || item.created_at)
         if (startDate && itemDate < startDate) return false
         if (endDate && itemDate > endDate) return false
       }
@@ -158,6 +189,26 @@ export default function InwardReportsPage({ setActiveRoute }) {
     const startIndex = (currentPage - 1) * itemsPerPage
     return filteredInwards.slice(startIndex, startIndex + itemsPerPage)
   }, [filteredInwards, currentPage, itemsPerPage])
+
+  // Row Selection Handlers
+  const isAllPaginatedSelected =
+    paginatedInwards.length > 0 && paginatedInwards.every((inv) => selectedIds.includes(inv.id))
+
+  const handleToggleSelectAll = () => {
+    if (isAllPaginatedSelected) {
+      const pageIds = paginatedInwards.map((inv) => inv.id)
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)))
+    } else {
+      const pageIds = paginatedInwards.map((inv) => inv.id)
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])))
+    }
+  }
+
+  const handleToggleSelectRow = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+  }
 
   // View Details Modal Trigger
   const handleOpenDetails = async (inwardId) => {
@@ -199,13 +250,11 @@ export default function InwardReportsPage({ setActiveRoute }) {
         })
         const data = await res.json()
         if (data.success) {
-          Swal.fire({
+          Toast.fire({
             icon: 'success',
-            title: 'Deleted!',
-            text: data.message || 'Inward record deleted successfully.',
-            timer: 1800,
-            showConfirmButton: false
+            title: data.message || 'Inward record deleted successfully'
           })
+          setSelectedIds((prev) => prev.filter((itemId) => itemId !== id))
           fetchInwardData()
           if (selectedInward && selectedInward.id === id) {
             setSelectedInward(null)
@@ -255,13 +304,7 @@ export default function InwardReportsPage({ setActiveRoute }) {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(blobUrl)
 
-      Swal.mixin({
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 2000,
-        timerProgressBar: true
-      }).fire({
+      Toast.fire({
         icon: 'success',
         title: 'Hardcopy document downloaded'
       })
@@ -279,17 +322,22 @@ export default function InwardReportsPage({ setActiveRoute }) {
 
   // Export to Excel
   const handleExportExcel = () => {
-    if (filteredInwards.length === 0) {
+    const targetInwards =
+      selectedIds.length > 0
+        ? filteredInwards.filter((i) => selectedIds.includes(i.id))
+        : filteredInwards
+
+    if (targetInwards.length === 0) {
       Swal.fire({
         icon: 'info',
         title: 'No Data',
-        text: 'There are no inward records to export for the current filters.',
+        text: 'There are no inward records to export for the current filters or selection.',
         confirmButtonColor: '#043486'
       })
       return
     }
 
-    const exportData = filteredInwards.map((inv, idx) => ({
+    const exportData = targetInwards.map((inv, idx) => ({
       'S.No': idx + 1,
       'Inward No': inv.inward_number,
       'Inward Date': new Date(inv.inward_date).toLocaleDateString('en-GB'),
@@ -309,12 +357,9 @@ export default function InwardReportsPage({ setActiveRoute }) {
     XLSX.utils.book_append_sheet(wb, ws, 'Inward_List')
     XLSX.writeFile(wb, `Inward_List_${new Date().toISOString().split('T')[0]}.xlsx`)
 
-    Swal.fire({
+    Toast.fire({
       icon: 'success',
-      title: 'Excel Export Ready',
-      text: `Successfully exported ${exportData.length} inward record(s) to Excel.`,
-      timer: 1800,
-      showConfirmButton: false
+      title: `Exported ${exportData.length} inward record(s) to Excel`
     })
   }
 
@@ -330,9 +375,10 @@ export default function InwardReportsPage({ setActiveRoute }) {
             <button
               onClick={handleExportExcel}
               className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0f766e] hover:bg-[#115e59] text-white font-bold text-xs rounded-none shadow-xs transition-all active:scale-[0.99] cursor-pointer"
+              title={selectedIds.length > 0 ? `Export ${selectedIds.length} Selected Record(s)` : 'Export All Filtered Records'}
             >
               <Download size={15} />
-              <span>EXPORT TO EXCEL</span>
+              <span>{selectedIds.length > 0 ? `EXPORT SELECTED (${selectedIds.length})` : 'EXPORT TO EXCEL'}</span>
             </button>
             <button
               onClick={() => {
@@ -420,6 +466,38 @@ export default function InwardReportsPage({ setActiveRoute }) {
         />
       </div>
 
+      {/* Bulk Action Bar when rows are selected */}
+      {selectedIds.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 text-[#292424] dark:text-white px-4 py-2.5 rounded-none shadow-xs flex flex-wrap items-center justify-between gap-3 border border-gray-200 dark:border-slate-800 animate-in slide-in-from-top-2 duration-150">
+          <div className="flex items-center gap-2.5">
+            <span className="px-2.5 py-0.5 text-xs font-bold text-[#043486] dark:text-blue-300 bg-blue-50 dark:bg-blue-950/70 border border-blue-200 dark:border-blue-900">
+              {selectedIds.length}
+            </span>
+            <span className="text-xs font-semibold text-gray-700 dark:text-slate-200">
+              {selectedIds.length === 1 ? 'inward record selected' : 'inward records selected'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="px-3 py-1.5 text-xs font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-none border border-gray-300 dark:border-slate-700 transition-colors cursor-pointer"
+            >
+              Clear Selection
+            </button>
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0f766e] hover:bg-[#115e59] text-white font-bold text-xs rounded-none shadow-xs transition-colors cursor-pointer"
+            >
+              <Download size={13} />
+              <span>Export Selected ({selectedIds.length})</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 4. Inward Table (Crisp Boxie Layout) */}
       <div className="bg-white dark:bg-slate-900 rounded-none border border-gray-200 dark:border-slate-800 shadow-xs overflow-hidden transition-colors">
         {isLoading ? (
@@ -435,10 +513,20 @@ export default function InwardReportsPage({ setActiveRoute }) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
+            <table className="w-full text-left text-sm border-collapse font-['Poppins',sans-serif]">
               <thead className="bg-[#f8fafc] dark:bg-slate-800/80 border-b border-gray-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-gray-600 dark:text-slate-300 font-bold">
                 <tr>
-                  <th className="py-3 px-4 text-center w-14">S.No</th>
+                  {/* Select All Checkbox */}
+                  <th className="py-3 px-3.5 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllPaginatedSelected}
+                      onChange={handleToggleSelectAll}
+                      disabled={isLoading || paginatedInwards.length === 0}
+                      className="w-4 h-4 text-[#043486] rounded-none border-gray-300 dark:border-slate-600 focus:ring-0 cursor-pointer accent-[#043486]"
+                    />
+                  </th>
+                  <th className="py-3 px-3 w-12 text-center">#</th>
                   <th className="py-3 px-4">Inward Date</th>
                   <th className="py-3 px-4">Inward No</th>
                   <th className="py-3 px-4">Supplier Name</th>
@@ -451,6 +539,7 @@ export default function InwardReportsPage({ setActiveRoute }) {
               <tbody className="divide-y divide-gray-200 dark:divide-slate-800 text-xs font-medium">
                 {paginatedInwards.map((inv, idx) => {
                   const serialIndex = (currentPage - 1) * itemsPerPage + idx + 1
+                  const isSelected = selectedIds.includes(inv.id)
                   const formattedDate = new Date(inv.inward_date).toLocaleDateString('en-GB', {
                     day: '2-digit',
                     month: 'short',
@@ -461,10 +550,24 @@ export default function InwardReportsPage({ setActiveRoute }) {
                   return (
                     <tr
                       key={inv.id}
-                      className="hover:bg-blue-50/40 dark:hover:bg-slate-800/50 transition-colors"
+                      className={`transition-colors ${
+                        isSelected
+                          ? 'bg-blue-50/80 dark:bg-blue-950/40 border-l-2 border-[#043486] dark:border-blue-500'
+                          : 'hover:bg-blue-50/40 dark:hover:bg-slate-800/40'
+                      }`}
                     >
-                      {/* S.No */}
-                      <td className="py-3.5 px-4 text-center text-gray-500 dark:text-slate-400 font-medium">
+                      {/* Checkbox */}
+                      <td className="py-3.5 px-3.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectRow(inv.id)}
+                          className="w-4 h-4 text-[#043486] rounded-none border-gray-300 dark:border-slate-600 focus:ring-0 cursor-pointer accent-[#043486]"
+                        />
+                      </td>
+
+                      {/* S.No / Row number */}
+                      <td className="py-3.5 px-3 text-center text-gray-500 dark:text-slate-400 font-mono">
                         {serialIndex}
                       </td>
 
@@ -514,29 +617,46 @@ export default function InwardReportsPage({ setActiveRoute }) {
 
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {/* Attached Hardcopy Button */}
                           <button
                             type="button"
                             onClick={() => handleDownloadHardcopy(inv.hardcopy_url, inv.inward_number)}
-                            className={`p-1.5 transition-colors cursor-pointer ${
+                            className={`p-1.5 rounded-none border transition-all cursor-pointer shadow-2xs ${
                               inv.hardcopy_url
-                                ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-800'
-                                : 'text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800'
+                                ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white border-emerald-200 dark:border-emerald-800'
+                                : 'text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
                             }`}
                             title={inv.hardcopy_url ? 'Download Hardcopy / Bill Document' : 'No Hardcopy Document Attached'}
                           >
                             <ImageDown size={15} />
                           </button>
+
+                          {/* Quick Edit Inward Record (Orange / Amber) */}
                           <button
+                            type="button"
+                            onClick={() => navigate(`/inward/edit/${inv.id}`)}
+                            className="p-1.5 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-500 dark:hover:text-white border border-amber-200 dark:border-amber-800 rounded-none transition-all cursor-pointer shadow-2xs"
+                            title="Edit Inward Record"
+                          >
+                            <Edit2 size={15} />
+                          </button>
+
+                          {/* View Inward Details (Blue) */}
+                          <button
+                            type="button"
                             onClick={() => handleOpenDetails(inv.id)}
-                            className="p-1.5 text-[#043486] dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            className="p-1.5 text-[#043486] dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 hover:bg-[#043486] hover:text-white dark:hover:bg-blue-600 dark:hover:text-white border border-blue-200 dark:border-blue-800 rounded-none transition-all cursor-pointer shadow-2xs"
                             title="View Inward Details"
                           >
                             <Eye size={15} />
                           </button>
+
+                          {/* Delete Inward Record */}
                           <button
+                            type="button"
                             onClick={() => handleDeleteInward(inv.id, inv.inward_number, inv.supplier_name)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 border border-gray-200 dark:border-slate-700 rounded-none transition-all cursor-pointer shadow-2xs"
                             title="Delete Inward Record"
                           >
                             <Trash2 size={15} />
@@ -711,15 +831,26 @@ export default function InwardReportsPage({ setActiveRoute }) {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-3 bg-gray-50 dark:bg-slate-800/60 border-t border-gray-200 dark:border-slate-800 flex justify-end">
+            <div className="px-6 py-3 bg-gray-50 dark:bg-slate-800/60 border-t border-gray-200 dark:border-slate-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const id = selectedInward.id
+                  setSelectedInward(null)
+                  navigate(`/inward/edit/${id}`)
+                }}
+                className="px-4 py-2 bg-[#043486] hover:bg-[#0248BC] text-white text-xs font-semibold rounded-none flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Edit2 size={13} />
+                <span>Edit Inward Entry</span>
+              </button>
               <button
                 onClick={() => setSelectedInward(null)}
-                className="px-5 py-2 bg-gray-800 hover:bg-gray-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-semibold rounded-none cursor-pointer"
+                className="px-5 py-2 bg-gray-800 hover:bg-gray-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-semibold rounded-none cursor-pointer transition-colors"
               >
                 Close
               </button>
             </div>
-
           </div>
         </div>
       )}
@@ -727,3 +858,4 @@ export default function InwardReportsPage({ setActiveRoute }) {
     </div>
   )
 }
+

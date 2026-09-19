@@ -32,7 +32,8 @@ import {
   FileCheck,
   FileDigit,
   AlertCircle,
-  Hash
+  Hash,
+  Pencil
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Swal from 'sweetalert2'
@@ -87,6 +88,7 @@ export default function AllServicesPage({ setActiveRoute }) {
   const [selectedService, setSelectedService] = useState(null)
   const [selectedReceiptService, setSelectedReceiptService] = useState(null)
   const [directPrintService, setDirectPrintService] = useState(null)
+  const [directPrintReceiptService, setDirectPrintReceiptService] = useState(null)
   const [serialModalService, setSerialModalService] = useState(null)
   const [isLoadingDetails, setIsLoadingDetails] = useState(false)
 
@@ -131,24 +133,30 @@ export default function AllServicesPage({ setActiveRoute }) {
   const handleDatePresetChange = (preset) => {
     setDatePreset(preset)
     const today = new Date()
+    const formatDateLocal = (d) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
 
     if (preset === 'ALL') {
       setStartDate('')
       setEndDate('')
     } else if (preset === 'TODAY') {
-      const formatted = today.toISOString().split('T')[0]
+      const formatted = formatDateLocal(today)
       setStartDate(formatted)
       setEndDate(formatted)
     } else if (preset === 'THIS_WEEK') {
       const day = today.getDay() || 7
       const firstDay = new Date(today)
       firstDay.setDate(today.getDate() - day + 1)
-      setStartDate(firstDay.toISOString().split('T')[0])
-      setEndDate(today.toISOString().split('T')[0])
+      setStartDate(formatDateLocal(firstDay))
+      setEndDate(formatDateLocal(today))
     } else if (preset === 'THIS_MONTH') {
       const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-      setStartDate(firstDay.toISOString().split('T')[0])
-      setEndDate(today.toISOString().split('T')[0])
+      setStartDate(formatDateLocal(firstDay))
+      setEndDate(formatDateLocal(today))
     }
     setCurrentPage(1)
   }
@@ -242,6 +250,17 @@ export default function AllServicesPage({ setActiveRoute }) {
         )
         // Refresh full list to get updated stats
         fetchInitialData()
+
+        Swal.mixin({
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 2000,
+          timerProgressBar: true
+        }).fire({
+          icon: 'success',
+          title: `Status updated to ${newStatus}`
+        })
       } else {
         throw new Error(data.message || 'Status update failed')
       }
@@ -403,12 +422,15 @@ export default function AllServicesPage({ setActiveRoute }) {
         if (data.success) {
           setServices(prev => prev.filter(s => s.id !== serviceId))
           setSelectedServiceIds(prev => prev.filter(id => id !== serviceId))
-          Swal.fire({
-            icon: 'success',
-            title: 'Deleted!',
-            text: 'Service request record has been permanently removed.',
+          Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
             timer: 2000,
-            showConfirmButton: false
+            timerProgressBar: true
+          }).fire({
+            icon: 'success',
+            title: `Service "${serviceNumber}" deleted successfully`
           })
           fetchInitialData()
         } else {
@@ -449,11 +471,23 @@ export default function AllServicesPage({ setActiveRoute }) {
 
       // 4. Date Range filter
       let matchesDate = true
-      if (startDate && service.service_date) {
-        matchesDate = matchesDate && service.service_date >= startDate
-      }
-      if (endDate && service.service_date) {
-        matchesDate = matchesDate && service.service_date <= endDate
+      if (service.service_date) {
+        let sDateStr = ''
+        if (typeof service.service_date === 'string') {
+          sDateStr = service.service_date.slice(0, 10)
+        } else if (service.service_date instanceof Date) {
+          const y = service.service_date.getFullYear()
+          const m = String(service.service_date.getMonth() + 1).padStart(2, '0')
+          const d = String(service.service_date.getDate()).padStart(2, '0')
+          sDateStr = `${y}-${m}-${d}`
+        }
+
+        if (startDate && sDateStr) {
+          matchesDate = matchesDate && sDateStr >= startDate
+        }
+        if (endDate && sDateStr) {
+          matchesDate = matchesDate && sDateStr <= endDate
+        }
       }
 
       return matchesSearch && matchesStatus && matchesPaymentMode && matchesDate
@@ -559,16 +593,32 @@ export default function AllServicesPage({ setActiveRoute }) {
     <div className="space-y-6">
       {/* 1. Header Component */}
       <ListPageHeader
-        icon={Wrench}
         title="Services & Repairs Registry"
         subtitle="Manage end-to-end service requests, track lifecycle stages, process invoices & dispatch receipts"
-        actionLabel="NEW REQUEST"
-        onActionClick={() => {
-          if (setActiveRoute) setActiveRoute('new-service')
-          navigate('/services/new')
-        }}
-        showExport={true}
-        onExportClick={handleExportExcel}
+        actions={
+          <>
+            <button
+              onClick={handleExportExcel}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0f766e] hover:bg-[#115e59] text-white font-bold text-xs rounded-none shadow-xs transition-all active:scale-[0.99] cursor-pointer"
+              title={selectedServiceIds.length > 0 ? `Export ${selectedServiceIds.length} Selected Record(s)` : 'Export All Filtered Records'}
+            >
+              <Download size={15} />
+              <span>
+                {selectedServiceIds.length > 0 ? `EXPORT SELECTED (${selectedServiceIds.length})` : 'EXPORT TO EXCEL'}
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                if (setActiveRoute) setActiveRoute('new-service')
+                navigate('/services/new')
+              }}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#043486] hover:bg-[#0248BC] text-white font-bold text-xs rounded-none shadow-xs transition-all active:scale-[0.99] cursor-pointer"
+            >
+              <Plus size={15} />
+              <span>NEW REQUEST</span>
+            </button>
+          </>
+        }
       />
 
       {/* 2. KPI Summary Cards */}
@@ -604,9 +654,9 @@ export default function AllServicesPage({ setActiveRoute }) {
 
       {/* 3. Search & Filter Bar */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
           {/* Search Box */}
-          <div className="md:col-span-2 relative">
+          <div className="md:col-span-5 relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -621,7 +671,7 @@ export default function AllServicesPage({ setActiveRoute }) {
           </div>
 
           {/* Status Filter */}
-          <div>
+          <div className="md:col-span-3">
             <select
               value={statusFilter}
               onChange={(e) => {
@@ -640,7 +690,7 @@ export default function AllServicesPage({ setActiveRoute }) {
           </div>
 
           {/* Payment Mode Filter */}
-          <div>
+          <div className="md:col-span-3">
             <select
               value={paymentModeFilter}
               onChange={(e) => {
@@ -657,25 +707,36 @@ export default function AllServicesPage({ setActiveRoute }) {
               <option value="Cheque">Cheque</option>
             </select>
           </div>
+
+          {/* Reset Filters */}
+          <div className="md:col-span-1">
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              title="Reset Filters"
+              className="w-full h-full min-h-[34px] flex items-center justify-center gap-1 py-2 px-2 text-xs font-bold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-none border border-gray-300 dark:border-slate-700 transition-colors cursor-pointer"
+            >
+              <RotateCcw size={13} />
+            </button>
+          </div>
         </div>
 
         {/* Date Filter & Preset Controls */}
         <ListDateRangeFilter
           datePreset={datePreset}
+          onDatePresetChange={handleDatePresetChange}
           startDate={startDate}
-          endDate={endDate}
-          onPresetChange={handleDatePresetChange}
           onStartDateChange={(val) => {
             setStartDate(val)
+            setDatePreset('CUSTOM')
             setCurrentPage(1)
           }}
+          endDate={endDate}
           onEndDateChange={(val) => {
             setEndDate(val)
+            setDatePreset('CUSTOM')
             setCurrentPage(1)
           }}
-          onReset={handleResetFilters}
-          activeCount={filteredServices.length}
-          totalCount={services.length}
         />
       </div>
 
@@ -708,7 +769,7 @@ export default function AllServicesPage({ setActiveRoute }) {
                 <tr>
                   <td colSpan="9" className="p-8 text-center text-slate-400">
                     <div className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-[#043486] border-t-transparent animate-spin"></div>
+                      <div className="w-4 h-4 border-2 border-[#043486] border-t-transparent rounded-full animate-spin"></div>
                       <span>Loading service registry records...</span>
                     </div>
                   </td>
@@ -882,7 +943,20 @@ export default function AllServicesPage({ setActiveRoute }) {
                             <Send className="w-4 h-4" />
                           </button>
 
-                          {/* 5. Delete Service Record (Red) */}
+                          {/* 5. Edit Service Record (Amber / Orange box matching Stock) */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (setActiveRoute) setActiveRoute('new-service')
+                              navigate(`/services/new?editId=${service.id}`)
+                            }}
+                            title="Edit Service Request"
+                            className="p-1.5 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-500 dark:hover:text-white border border-amber-200 dark:border-amber-800 rounded-none transition-all cursor-pointer shadow-2xs"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+
+                          {/* 6. Delete Service Record (Red) */}
                           <button
                             type="button"
                             onClick={() => handleDeleteService(service.id, service.service_number)}
@@ -918,7 +992,7 @@ export default function AllServicesPage({ setActiveRoute }) {
       {/* 6. Printable Service Invoice Modal */}
       {selectedService &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto print:hidden">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-4xl my-8 max-h-[90vh] flex flex-col">
               {/* Modal Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
@@ -931,8 +1005,13 @@ export default function AllServicesPage({ setActiveRoute }) {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => window.print()}
-                    className="px-3 py-1.5 text-xs font-semibold text-white bg-[#043486] hover:bg-[#032560] flex items-center gap-1.5"
+                    onClick={() => {
+                      setDirectPrintService(selectedService)
+                      setTimeout(() => {
+                        window.print()
+                      }, 250)
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold text-white bg-[#043486] hover:bg-[#032560] flex items-center gap-1.5 cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5" /> Print Invoice
                   </button>
@@ -964,7 +1043,7 @@ export default function AllServicesPage({ setActiveRoute }) {
       {/* 7. Printable Service Receipt Modal */}
       {selectedReceiptService &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto print:hidden">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-3xl my-8 max-h-[90vh] flex flex-col">
               {/* Modal Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
@@ -977,8 +1056,13 @@ export default function AllServicesPage({ setActiveRoute }) {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => window.print()}
-                    className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1.5"
+                    onClick={() => {
+                      setDirectPrintReceiptService(selectedReceiptService)
+                      setTimeout(() => {
+                        window.print()
+                      }, 250)
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1.5 cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5" /> Print Receipt
                   </button>
@@ -1009,7 +1093,7 @@ export default function AllServicesPage({ setActiveRoute }) {
       {/* 8. Serial Numbers Quick Check Modal */}
       {serialModalService &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150 print:hidden">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col rounded-none">
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60">
@@ -1123,6 +1207,16 @@ export default function AllServicesPage({ setActiveRoute }) {
         createPortal(
           <div id="invoice-print-wrapper">
             <ServiceInvoiceTemplate service={directPrintService} settings={settings} />
+          </div>,
+          document.body
+        )}
+
+      {/* 10. Direct Printable Receipt Portal for instant table action window.print() */}
+      {directPrintReceiptService &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div id="receipt-print-wrapper">
+            <ServiceReceiptTemplate service={directPrintReceiptService} company={settings} />
           </div>,
           document.body
         )}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import {
   Receipt,
   Plus,
@@ -20,7 +21,8 @@ import {
   AlertCircle,
   Calendar,
   FileDigit,
-  ChevronDown
+  ChevronDown,
+  ArrowLeft
 } from 'lucide-react'
 import Swal from 'sweetalert2'
 import SearchableSelect from '../components/common/SearchableSelect'
@@ -68,6 +70,11 @@ const INDIAN_STATES = [
 ]
 
 export default function CreateBillPage({ setActiveRoute }) {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const editId = searchParams.get('editId')
+  const isEditMode = Boolean(editId)
+
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -83,6 +90,8 @@ export default function CreateBillPage({ setActiveRoute }) {
   // Bill Meta
   const [invoiceNumber, setInvoiceNumber] = useState('INV-2026-01')
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
+  const [hasDueDate, setHasDueDate] = useState(true)
+  const [dueDate, setDueDate] = useState('')
   const [invoiceType, setInvoiceType] = useState('GST')
   const [copyType, setCopyType] = useState('ORIGINAL')
   const [placeOfSupply, setPlaceOfSupply] = useState('33 - Tamil Nadu')
@@ -93,6 +102,8 @@ export default function CreateBillPage({ setActiveRoute }) {
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
+  const [sameAsDelivery, setSameAsDelivery] = useState(true)
+  const [deliveryAddress, setDeliveryAddress] = useState('')
   const [customerGstin, setCustomerGstin] = useState('')
 
   // Payment & Remarks
@@ -112,7 +123,12 @@ export default function CreateBillPage({ setActiveRoute }) {
       hsn_code: '',
       quantity: 1,
       unit: 'NOS',
+      current_stock: null,
       rate: 0,
+      original_rate: 0,
+      has_discount: false,
+      discount_percent: 0,
+      discount_amount: 0,
       tax_inclusive: true,
       tax_rate: 18.00,
       tax_amount: 0,
@@ -192,16 +208,18 @@ export default function CreateBillPage({ setActiveRoute }) {
     }
   }
 
-  // Fetch Next Number, Settings & Materials on load
+  // Fetch Next Number / Bill Details, Settings & Materials on load
   const loadInitialData = async () => {
     try {
       setIsLoading(true)
       
       // 1. Fetch Settings
+      let loadedSettings = null
       const settingsRes = await fetch(API_ENDPOINTS.SETTINGS)
       const settingsData = await settingsRes.json()
       if (settingsData.success && settingsData.settings) {
-        setSettings(settingsData.settings)
+        loadedSettings = settingsData.settings
+        setSettings(loadedSettings)
       }
 
       // 2. Fetch Categories
@@ -212,17 +230,96 @@ export default function CreateBillPage({ setActiveRoute }) {
       }
 
       // 3. Fetch Materials
+      let loadedMaterials = []
       const matRes = await fetch(API_ENDPOINTS.MATERIALS)
       const matData = await matRes.json()
       if (matData.success && matData.materials) {
-        setMaterials(matData.materials.filter(m => m.status === 'Active'))
+        loadedMaterials = matData.materials.filter(m => m.status === 'Active')
+        setMaterials(loadedMaterials)
       }
 
-      // 4. Fetch Next Invoice Number
-      fetchNextInvoiceNumber()
+      // 4. If Edit Mode, Fetch Existing Bill
+      if (editId) {
+        const billRes = await fetch(API_ENDPOINTS.BILL_BY_ID(editId))
+        const billData = await billRes.json()
+        if (billData.success && billData.bill) {
+          const b = billData.bill
+          setInvoiceNumber(b.invoice_number || '')
+          setInvoiceDate(b.invoice_date ? b.invoice_date.split('T')[0] : new Date().toISOString().split('T')[0])
+          setHasDueDate(Boolean(b.has_due_date !== undefined ? b.has_due_date : b.due_date))
+          setDueDate(b.due_date ? b.due_date.split('T')[0] : '')
+          setInvoiceType(b.invoice_type || 'GST')
+          setCopyType(b.copy_type || 'ORIGINAL')
+          setPlaceOfSupply(b.place_of_supply || '33 - Tamil Nadu')
+          setCustomerType(b.customer_type || 'Individual')
+          setCustomerName(b.customer_name || '')
+          setCustomerPhone(b.customer_phone || '')
+          setCustomerEmail(b.customer_email || '')
+          setCustomerAddress(b.customer_address || '')
+          const isSame = b.same_as_billing !== undefined ? Boolean(b.same_as_billing) : (!b.delivery_address || b.delivery_address === b.customer_address)
+          setSameAsDelivery(isSame)
+          setDeliveryAddress(b.delivery_address || '')
+          setCustomerGstin(b.customer_gstin || '')
+          setPaymentMode(b.payment_mode || '')
+          setPaymentStatus(b.payment_status || 'Pending')
+          setNotes(b.notes || '')
+
+          if (Array.isArray(b.items) && b.items.length > 0) {
+            setItems(b.items.map(it => {
+              const serials = it.serial_numbers && it.serial_numbers.length > 0
+                ? it.serial_numbers
+                : (it.serial_number ? it.serial_number.split(',').map(s => s.trim()) : [''])
+
+              const foundMat = loadedMaterials.find(m => String(m.id) === String(it.material_id))
+              const dbStock = foundMat 
+                ? parseFloat(foundMat.current_stock ?? foundMat.opening_stock ?? 0) 
+                : (it.current_stock !== undefined && it.current_stock !== null ? parseFloat(it.current_stock) : null)
+              
+              const itemQty = parseFloat(it.quantity) || 1
+              // For an existing line item in edit mode, it already reserved itemQty in this bill.
+              // So available stock for editing this bill = current warehouse stock + itemQty.
+              const availableStock = dbStock !== null ? (dbStock + itemQty) : null
+
+              return {
+                material_id: it.material_id ? String(it.material_id) : '',
+                item_name: it.item_name || it.name || '',
+                category_name: it.category_name || (foundMat ? foundMat.category_name : '') || '',
+                category_id: it.category_id ? String(it.category_id) : (foundMat ? String(foundMat.category_id) : ''),
+                serial_number: it.serial_number || '',
+                serial_numbers: serials,
+                hsn_code: it.hsn_code || (foundMat ? foundMat.hsn_code : '') || '',
+                quantity: itemQty,
+                unit: it.unit || (foundMat ? foundMat.unit : 'NOS') || 'NOS',
+                current_stock: availableStock,
+                rate: parseFloat(it.rate) || 0,
+                original_rate: parseFloat(it.original_rate || it.rate) || 0,
+                has_discount: Boolean(it.has_discount || parseFloat(it.discount_percent || 0) > 0),
+                discount_percent: parseFloat(it.discount_percent) || 0,
+                discount_amount: parseFloat(it.discount_amount) || 0,
+                tax_inclusive: it.tax_inclusive !== undefined ? Boolean(it.tax_inclusive) : true,
+                tax_rate: parseFloat(it.tax_rate) || 0,
+                tax_amount: parseFloat(it.tax_amount) || 0,
+                amount: parseFloat(it.amount) || 0,
+                has_serial: Boolean(it.has_serial || it.serial_tracking || (serials && serials.filter(Boolean).length > 0)),
+                return_policy: Boolean(it.return_policy)
+              }
+            }))
+          }
+        } else {
+          throw new Error(billData.message || 'Invoice not found')
+        }
+      } else {
+        // 5. Fetch Next Invoice Number (New Bill)
+        fetchNextInvoiceNumber()
+      }
 
     } catch (err) {
       console.error('Error loading initial billing data:', err)
+      Swal.fire({
+        icon: 'error',
+        title: 'Failed to load bill data',
+        text: err.message || 'Could not fetch invoice details.'
+      })
     } finally {
       setIsLoading(false)
     }
@@ -243,6 +340,16 @@ export default function CreateBillPage({ setActiveRoute }) {
   useEffect(() => {
     loadInitialData()
   }, [])
+
+  // Auto calculate due date whenever invoice date, settings, or hasDueDate changes
+  useEffect(() => {
+    if (invoiceDate && hasDueDate) {
+      const days = settings?.due_date_days !== undefined ? parseInt(settings.due_date_days, 10) : 15
+      const d = new Date(invoiceDate)
+      d.setDate(d.getDate() + days)
+      setDueDate(d.toISOString().split('T')[0])
+    }
+  }, [invoiceDate, settings, hasDueDate])
 
   // Check if Place of Supply is Intra-State (Tamil Nadu)
   const isIntraState = placeOfSupply.includes('33') || placeOfSupply.toLowerCase().includes('tamil nadu')
@@ -346,7 +453,7 @@ export default function CreateBillPage({ setActiveRoute }) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [items, customerName, customerPhone, customerAddress, customerGstin, placeOfSupply, invoiceNumber, invoiceDate, invoiceType, copyType, paymentMode, paymentStatus, notes, settings])
+  }, [items, customerName, customerPhone, customerAddress, sameAsDelivery, deliveryAddress, customerGstin, placeOfSupply, invoiceNumber, invoiceDate, hasDueDate, dueDate, invoiceType, copyType, paymentMode, paymentStatus, notes, settings])
 
   // Handle Category Selection for an item row
   const handleCategorySelect = (index, categoryId) => {
@@ -359,6 +466,11 @@ export default function CreateBillPage({ setActiveRoute }) {
       let newItemName = currentItem.item_name
       let newHsn = currentItem.hsn_code
       let newRate = currentItem.rate
+      let newOriginalRate = currentItem.original_rate
+      let newHasDiscount = currentItem.has_discount
+      let newDiscountPercent = currentItem.discount_percent
+      let newDiscountAmount = currentItem.discount_amount
+      let newCurrentStock = currentItem.current_stock
       let newUnit = currentItem.unit
       let newTaxInclusive = currentItem.tax_inclusive
       let newTaxRate = currentItem.tax_rate
@@ -374,6 +486,11 @@ export default function CreateBillPage({ setActiveRoute }) {
           newItemName = ''
           newHsn = ''
           newRate = 0
+          newOriginalRate = 0
+          newHasDiscount = false
+          newDiscountPercent = 0
+          newDiscountAmount = 0
+          newCurrentStock = null
           newTaxAmount = 0
           newAmount = 0
           newHasSerial = false
@@ -388,6 +505,11 @@ export default function CreateBillPage({ setActiveRoute }) {
         item_name: newItemName,
         hsn_code: newHsn,
         rate: newRate,
+        original_rate: newOriginalRate,
+        has_discount: newHasDiscount,
+        discount_percent: newDiscountPercent,
+        discount_amount: newDiscountAmount,
+        current_stock: newCurrentStock,
         unit: newUnit,
         tax_inclusive: newTaxInclusive,
         tax_rate: newTaxRate,
@@ -399,11 +521,25 @@ export default function CreateBillPage({ setActiveRoute }) {
     })
   }
 
-  // Handle Material Selection for an item row with duplicate detection
+  // Handle Material Selection for an item row with duplicate detection, stock check and discount
   const handleMaterialSelect = (index, materialId) => {
     const selectedMat = materials.find(m => String(m.id) === String(materialId))
     
     if (selectedMat) {
+      const curStock = parseFloat(selectedMat.current_stock ?? selectedMat.opening_stock ?? 0)
+      if (curStock <= 0) {
+        Swal.mixin({
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 4000,
+          timerProgressBar: true
+        }).fire({
+          icon: 'error',
+          title: `Out of Stock: "${selectedMat.name}" has 0 stock!`
+        })
+      }
+
       // Fetch available warehouse serials if serial tracking enabled
       if (selectedMat.serial_tracking || selectedMat.has_serial) {
         fetchAvailableSerialsForMaterial(selectedMat.id)
@@ -428,9 +564,15 @@ export default function CreateBillPage({ setActiveRoute }) {
     setItems(prevItems => {
       const updated = [...prevItems]
       if (selectedMat) {
+        const curStock = parseFloat(selectedMat.current_stock ?? selectedMat.opening_stock ?? 0)
         const qty = Math.min(25, Math.max(1, parseFloat(updated[index].quantity) || 1))
-        const rate = parseFloat(selectedMat.selling_price) || 0
-        const taxable = qty * rate
+        const rawRate = parseFloat(selectedMat.selling_price) || 0
+        const hasDiscount = Boolean(selectedMat.has_discount)
+        const discountPercent = hasDiscount ? (parseFloat(selectedMat.discount_percent) || 0) : 0
+        const discountAmount = hasDiscount ? (rawRate * (discountPercent / 100)) : 0
+        const effectiveRate = hasDiscount ? Math.max(0, rawRate - discountAmount) : rawRate
+
+        const taxable = qty * effectiveRate
         const isTaxEligible = selectedMat.tax_inclusive !== false && selectedMat.tax_inclusive !== 0 && selectedMat.tax_inclusive !== '0'
         const effectiveTaxRate = calculateEffectiveTaxRate(isTaxEligible, invoiceType, isIntraState)
         const taxAmt = taxable * (effectiveTaxRate / 100)
@@ -447,11 +589,16 @@ export default function CreateBillPage({ setActiveRoute }) {
           ...updated[index],
           material_id: selectedMat.id,
           item_name: selectedMat.name,
+          current_stock: curStock,
           category_id: selectedMat.category_id ? String(selectedMat.category_id) : updated[index].category_id,
           category_name: selectedMat.category_name || updated[index].category_name || '',
           hsn_code: selectedMat.hsn_code || '',
           unit: selectedMat.unit || 'NOS',
-          rate: rate,
+          original_rate: rawRate,
+          has_discount: hasDiscount,
+          discount_percent: discountPercent,
+          discount_amount: parseFloat(discountAmount.toFixed(2)),
+          rate: parseFloat(effectiveRate.toFixed(2)),
           tax_inclusive: isTaxEligible,
           tax_rate: effectiveTaxRate,
           tax_amount: parseFloat(taxAmt.toFixed(2)),
@@ -466,10 +613,15 @@ export default function CreateBillPage({ setActiveRoute }) {
           ...updated[index],
           material_id: '',
           item_name: '',
+          current_stock: null,
           serial_number: '',
           serial_numbers: [''],
           hsn_code: '',
           rate: 0,
+          original_rate: 0,
+          has_discount: false,
+          discount_percent: 0,
+          discount_amount: 0,
           unit: 'NOS',
           tax_inclusive: true,
           tax_rate: invoiceType === 'GST' ? activeTaxRate : 0,
@@ -589,7 +741,12 @@ export default function CreateBillPage({ setActiveRoute }) {
         hsn_code: '',
         quantity: 1,
         unit: 'NOS',
+        current_stock: null,
         rate: 0,
+        original_rate: 0,
+        has_discount: false,
+        discount_percent: 0,
+        discount_amount: 0,
         tax_inclusive: true,
         tax_rate: invoiceType === 'GST' ? activeTaxRate : 0,
         tax_amount: 0,
@@ -655,6 +812,8 @@ export default function CreateBillPage({ setActiveRoute }) {
   // Aggregate Bill Calculations
   const taxableAmount = items.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0)), 0)
   const totalTax = invoiceType === 'GST' ? items.reduce((sum, item) => sum + (parseFloat(item.tax_amount) || 0), 0) : 0
+  const totalDiscountSavings = items.reduce((sum, item) => sum + ((parseFloat(item.discount_amount) || 0) * (parseFloat(item.quantity) || 1)), 0)
+  const totalGrossOrigAmt = items.reduce((sum, item) => sum + (((parseFloat(item.original_rate) || parseFloat(item.rate) || 0)) * (parseFloat(item.quantity) || 1)), 0)
 
   const cgstAmount = (invoiceType === 'GST' && isIntraState) ? (totalTax / 2) : 0
   const sgstAmount = (invoiceType === 'GST' && isIntraState) ? (totalTax / 2) : 0
@@ -672,8 +831,15 @@ export default function CreateBillPage({ setActiveRoute }) {
     setCustomerPhone('')
     setCustomerEmail('')
     setCustomerAddress('')
+    setSameAsDelivery(true)
+    setDeliveryAddress('')
     setCustomerGstin('')
     setPlaceOfSupply('33 - Tamil Nadu')
+    setHasDueDate(true)
+    const days = settings?.due_date_days !== undefined ? parseInt(settings.due_date_days, 10) : 15
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    setDueDate(d.toISOString().split('T')[0])
     setNotes('')
     setPaymentMode('')
     setPaymentStatus('Pending')
@@ -688,7 +854,12 @@ export default function CreateBillPage({ setActiveRoute }) {
         hsn_code: '',
         quantity: 1,
         unit: 'NOS',
+        current_stock: null,
         rate: 0,
+        original_rate: 0,
+        has_discount: false,
+        discount_percent: 0,
+        discount_amount: 0,
         tax_inclusive: true,
         tax_rate: invoiceType === 'GST' ? activeTaxRate : 0,
         tax_amount: 0,
@@ -700,21 +871,18 @@ export default function CreateBillPage({ setActiveRoute }) {
     fetchNextInvoiceNumber()
   }
 
-  // Submit & Save Bill
-  const handleSubmit = async (e, isSaveAndNew = false) => {
-    if (e && e.preventDefault) e.preventDefault()
-
+  // Validate Bill before saving
+  const validateBill = () => {
     if (!customerName.trim()) {
       Swal.fire({
         icon: 'warning',
         title: 'Customer Name Required',
-        text: 'Please enter the Customer / Client name.',
+        text: 'Please enter customer / client full name.',
         confirmButtonColor: '#043486'
       })
-      return
+      return false
     }
 
-    // 10-digit mobile number validation
     if (customerPhone.trim() && customerPhone.trim().length !== 10) {
       Swal.fire({
         icon: 'warning',
@@ -722,80 +890,133 @@ export default function CreateBillPage({ setActiveRoute }) {
         text: 'Mobile number must be exactly 10 digits.',
         confirmButtonColor: '#043486'
       })
-      return
+      return false
     }
 
-    const validItems = items.filter(item => item.item_name && item.item_name.trim())
-    if (validItems.length === 0) {
+    if (!sameAsDelivery && !deliveryAddress.trim()) {
       Swal.fire({
         icon: 'warning',
-        title: 'No Valid Items',
-        text: 'Please select at least one material for this invoice.',
+        title: 'Delivery Address Required',
+        text: 'Please enter the delivery address since it is different from billing address.',
         confirmButtonColor: '#043486'
       })
-      return
+      return false
     }
 
-    // 1. Check Duplicate Serial Numbers
-    if (duplicateSerials.size > 0) {
-      const duplicateList = Array.from(duplicateSerials).join(', ')
-      Swal.mixin({
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 4000,
-        timerProgressBar: true
-      }).fire({
-        icon: 'error',
-        title: 'Duplicate Serial Numbers!',
-        text: `Duplicate found: "${duplicateList}". Please ensure all serials are unique.`
+    if (items.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'No Items Added',
+        text: 'Please add at least one line item to the bill.',
+        confirmButtonColor: '#043486'
       })
-      return
+      return false
     }
 
-    // 2. Validate Serial Numbers for tracked items (Strictly REQUIRED)
-    for (let i = 0; i < validItems.length; i++) {
-      const it = validItems[i]
-      if (it.has_serial) {
-        const count = Math.min(25, Math.max(1, Math.floor(parseFloat(it.quantity) || 1)))
-        const serials = it.serial_numbers || []
-        for (let s = 0; s < count; s++) {
-          const sVal = (serials[s] || '').trim()
-          if (!sVal) {
-            Swal.mixin({
-              toast: true,
-              position: 'top-end',
-              showConfirmButton: false,
-              timer: 4000,
-              timerProgressBar: true
-            }).fire({
-              icon: 'error',
-              title: 'Serial Number Required!',
-              text: `Please enter Serial #${s + 1} for item "${it.item_name}" (Row ${i + 1}).`
-            })
-            return
-          }
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      if (!it.material_id && !it.item_name.trim()) {
+        Swal.fire({
+          icon: 'warning',
+          title: `Item #${i + 1} Incomplete`,
+          text: 'Please select a material or type an item name.',
+          confirmButtonColor: '#043486'
+        })
+        return false
+      }
 
-          // Check if verified in DB as not found
-          const dbCheck = verifiedSerials[sVal.toLowerCase()]
-          if (dbCheck && dbCheck.found === false) {
-            Swal.mixin({
-              toast: true,
-              position: 'top-end',
-              showConfirmButton: false,
-              timer: 4500,
-              timerProgressBar: true
-            }).fire({
-              icon: 'error',
-              title: 'Serial Not Found in Stock!',
-              text: `Serial number "${sVal}" for "${it.item_name}" is not registered in warehouse inventory.`
+      // Check Out of Stock and Insufficient Stock for warehouse inventory items
+      if (it.material_id) {
+        const foundMat = materials.find(m => String(m.id) === String(it.material_id))
+        const rawStock = it.current_stock !== null && it.current_stock !== undefined
+          ? parseFloat(it.current_stock)
+          : (foundMat ? parseFloat(foundMat.current_stock ?? foundMat.opening_stock ?? 0) : null)
+
+        const curStock = rawStock !== null ? rawStock : 0
+        const reqQty = parseFloat(it.quantity) || 1
+
+        if (rawStock !== null && curStock <= 0) {
+          Swal.fire({
+            icon: 'error',
+            title: 'Product Out of Stock!',
+            html: `Cannot bill <strong>"${it.item_name || 'Selected Material'}"</strong> because available stock is <strong>0 ${it.unit || 'NOS'}</strong>.<br/><br/>Please update inventory or remove item before creating outward bill.`,
+            confirmButtonColor: '#d33'
+          })
+          return false
+        }
+        if (rawStock !== null && reqQty > curStock) {
+          Swal.fire({
+            icon: 'warning',
+            title: 'Insufficient Stock Quantity!',
+            html: `Product <strong>"${it.item_name || 'Selected Material'}"</strong> only has <strong>${curStock} ${it.unit || 'NOS'}</strong> in stock, but requested quantity is <strong>${reqQty}</strong>.`,
+            confirmButtonColor: '#043486'
+          })
+          return false
+        }
+      }
+
+      if (it.has_serial) {
+        const qtyCount = Math.min(25, Math.max(1, Math.floor(parseFloat(it.quantity) || 1)))
+        for (let sIdx = 0; sIdx < qtyCount; sIdx++) {
+          const serialVal = it.serial_numbers?.[sIdx] || (sIdx === 0 ? it.serial_number : '') || ''
+          if (!serialVal.trim()) {
+            Swal.fire({
+              icon: 'warning',
+              title: `Serial Number Missing!`,
+              text: `Item #${i + 1} (${it.item_name || 'Item'}) requires ${qtyCount} serial numbers. Slot #${sIdx + 1} is empty.`,
+              confirmButtonColor: '#043486'
             })
-            return
+            return false
           }
         }
       }
     }
 
+    if (duplicateSerials.size > 0) {
+      const dupeList = Array.from(duplicateSerials).join(', ')
+      Swal.fire({
+        icon: 'error',
+        title: 'Duplicate Serial Numbers Found!',
+        text: `The following serial numbers are duplicated in this bill: ${dupeList}. Each serial number must be unique.`,
+        confirmButtonColor: '#043486'
+      })
+      return false
+    }
+
+    return true
+  }
+
+  // Handle Form Submission (Save & Print or Save & New)
+  const handleSubmit = async (e, isSaveAndNew = false) => {
+    if (e && e.preventDefault) e.preventDefault()
+
+    if (!validateBill()) return
+
+    const validItems = items.map(it => {
+      const qtyCount = Math.min(25, Math.max(1, Math.floor(parseFloat(it.quantity) || 1)))
+      const serialList = it.has_serial 
+        ? (it.serial_numbers && it.serial_numbers.length > 0 ? it.serial_numbers.slice(0, qtyCount).filter(Boolean) : [it.serial_number].filter(Boolean))
+        : []
+      
+      return {
+        material_id: it.material_id ? parseInt(it.material_id, 10) : null,
+        item_name: it.item_name,
+        hsn_code: it.hsn_code,
+        quantity: parseFloat(it.quantity) || 1,
+        unit: it.unit,
+        rate: parseFloat(it.rate) || 0,
+        original_rate: parseFloat(it.original_rate || it.rate) || 0,
+        has_discount: Boolean(it.has_discount),
+        discount_percent: parseFloat(it.discount_percent) || 0,
+        discount_amount: parseFloat(it.discount_amount) || 0,
+        tax_rate: parseFloat(it.tax_rate) || 0,
+        tax_amount: parseFloat(it.tax_amount) || 0,
+        amount: parseFloat(it.amount) || 0,
+        serial_number: serialList.join(', '),
+        serial_numbers: serialList,
+        return_policy: Boolean(it.return_policy)
+      }
+    })
 
     setIsSaving(true)
 
@@ -803,6 +1024,8 @@ export default function CreateBillPage({ setActiveRoute }) {
       const payload = {
         invoice_number: invoiceNumber.trim(),
         invoice_date: invoiceDate,
+        due_date: hasDueDate ? dueDate : null,
+        has_due_date: hasDueDate,
         invoice_type: invoiceType,
         copy_type: copyType,
         customer_type: customerType || 'Individual',
@@ -810,6 +1033,8 @@ export default function CreateBillPage({ setActiveRoute }) {
         customer_phone: customerPhone.trim(),
         customer_email: customerEmail.trim(),
         customer_address: customerAddress.trim(),
+        same_as_billing: sameAsDelivery,
+        delivery_address: sameAsDelivery ? (customerAddress ? customerAddress.trim() : null) : (deliveryAddress ? deliveryAddress.trim() : null),
         customer_gstin: customerGstin.trim(),
         place_of_supply: placeOfSupply,
         taxable_amount: parseFloat(taxableAmount.toFixed(2)),
@@ -829,8 +1054,11 @@ export default function CreateBillPage({ setActiveRoute }) {
         items: validItems
       }
 
-      const res = await fetch(API_ENDPOINTS.BILLS, {
-        method: 'POST',
+      const endpoint = isEditMode && editId ? API_ENDPOINTS.BILL_BY_ID(editId) : API_ENDPOINTS.BILLS
+      const method = isEditMode && editId ? 'PUT' : 'POST'
+
+      const res = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
@@ -838,7 +1066,19 @@ export default function CreateBillPage({ setActiveRoute }) {
       const data = await res.json()
 
       if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Failed to save bill')
+        throw new Error(data.message || (isEditMode ? 'Failed to update invoice' : 'Failed to save bill'))
+      }
+
+      if (isEditMode) {
+        Swal.fire({
+          icon: 'success',
+          title: 'Invoice Updated Successfully!',
+          text: `Invoice #${invoiceNumber} has been updated.`,
+          confirmButtonColor: '#043486'
+        }).then(() => {
+          navigate('/outward-list')
+        })
+        return
       }
 
       if (isSaveAndNew) {
@@ -911,11 +1151,21 @@ export default function CreateBillPage({ setActiveRoute }) {
       const query = hsnCode.trim().toLowerCase()
       filtered = filtered.filter(m => m.hsn_code && m.hsn_code.toLowerCase().includes(query))
     }
-    return filtered.map(m => ({
-      value: m.id,
-      label: m.name,
-      subLabel: `${m.category_name ? `[${m.category_name}] • ` : ''}₹${m.selling_price} / ${m.unit || 'NOS'}${m.hsn_code ? ` • HSN: ${m.hsn_code}` : ''}`
-    }))
+    return filtered.map(m => {
+      const hasDisc = Boolean(m.has_discount)
+      const discPct = hasDisc ? parseFloat(m.discount_percent) || 0 : 0
+      const origRate = parseFloat(m.selling_price) || 0
+      const discRate = hasDisc ? (origRate * (1 - discPct / 100)).toFixed(2) : origRate.toFixed(2)
+      const curStock = parseFloat(m.current_stock ?? m.opening_stock ?? 0)
+      const isOut = curStock <= 0
+      const stockBadge = isOut ? '🔴 Out of Stock (0 in stock)' : `🟢 Stock: ${curStock} ${m.unit || 'NOS'}`
+
+      return {
+        value: m.id,
+        label: isOut ? `${m.name} [Out of Stock]` : m.name,
+        subLabel: `${stockBadge} • ${m.category_name ? `[${m.category_name}] • ` : ''}${hasDisc ? `₹${discRate} (Disc ${discPct}% from ₹${origRate})` : `₹${m.selling_price}`} / ${m.unit || 'NOS'}${m.hsn_code ? ` • HSN: ${m.hsn_code}` : ''}`
+      }
+    })
   }
 
   const stateOptions = INDIAN_STATES.map(st => ({
@@ -928,18 +1178,43 @@ export default function CreateBillPage({ setActiveRoute }) {
       
       {/* 1. Page Header & Quick Shortcuts Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-none border border-gray-200 dark:border-slate-800 shadow-sm transition-colors">
-        <div>
-          <h1 className="text-xl font-bold text-[#292424] dark:text-white">Create New Invoice</h1>
-          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Generate customer invoice with automated GST taxes and live currency calculation.</p>
+        <div className="flex items-center gap-3">
+          {isEditMode && (
+            <button
+              type="button"
+              onClick={() => navigate('/outward-list')}
+              className="p-2.5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-[#043486] dark:text-blue-400 rounded-none transition-colors cursor-pointer"
+              title="Back to Outward List"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
+          <div>
+            <h1 className="text-xl font-bold text-[#292424] dark:text-white flex items-center gap-2">
+              <span>{isEditMode ? `Edit Invoice #${invoiceNumber}` : 'Create New Invoice'}</span>
+              {isEditMode && (
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 border border-amber-300 text-[10px] font-bold uppercase">
+                  Edit Mode
+                </span>
+              )}
+            </h1>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+              {isEditMode ? 'Modify outward bill details, line items, and update customer invoice.' : 'Generate customer invoice with automated GST taxes and live currency calculation.'}
+            </p>
+          </div>
         </div>
 
         {/* Keyboard Shortcuts Hint Bar */}
         <div className="hidden md:flex items-center gap-2 text-[11px] text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-950 px-3 py-1.5 border border-gray-200 dark:border-slate-800">
-          <span><kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 font-mono text-[10px] font-bold text-[#043486] dark:text-blue-400">Ctrl+Enter</kbd> Save</span>
+          <span><kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 font-mono text-[10px] font-bold text-[#043486] dark:text-blue-400">Ctrl+Enter</kbd> {isEditMode ? 'Update' : 'Save'}</span>
           <span>•</span>
           <span><kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 font-mono text-[10px] font-bold text-[#043486] dark:text-blue-400">Alt+A</kbd> Add Item</span>
-          <span>•</span>
-          <span><kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 font-mono text-[10px] font-bold text-[#043486] dark:text-blue-400">Alt+R</kbd> Reset</span>
+          {!isEditMode && (
+            <>
+              <span>•</span>
+              <span><kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 font-mono text-[10px] font-bold text-[#043486] dark:text-blue-400">Alt+R</kbd> Reset</span>
+            </>
+          )}
         </div>
       </div>
 
@@ -1021,6 +1296,69 @@ export default function CreateBillPage({ setActiveRoute }) {
                     <option value="Company">Company (Business / Firm)</option>
                   </select>
                 </div>
+
+                {/* Due Date Row Checkbox + Editable Input */}
+                <div className="sm:col-span-3 pt-3 border-t border-gray-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/60 dark:bg-slate-950/40 p-3">
+                  <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={hasDueDate}
+                      onChange={(e) => {
+                        const isChecked = e.target.checked
+                        setHasDueDate(isChecked)
+                        if (isChecked) {
+                          const days = settings?.due_date_days !== undefined ? parseInt(settings.due_date_days, 10) : 15
+                          const d = new Date(invoiceDate)
+                          d.setDate(d.getDate() + days)
+                          setDueDate(d.toISOString().split('T')[0])
+                        } else {
+                          setDueDate('')
+                        }
+                      }}
+                      className="w-4 h-4 text-[#043486] rounded-none focus:ring-0 cursor-pointer accent-[#043486]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-[#292424] dark:text-white">
+                        Enable Payment Due Date
+                      </span>
+                      <span className="text-[11px] text-gray-500 dark:text-slate-400 block sm:inline sm:ml-1.5">
+                        (Default: {settings?.due_date_days || 15} days from invoice date)
+                      </span>
+                    </div>
+                  </label>
+
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                      Due Date:
+                    </label>
+                    <input
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setDueDate(val)
+                        if (val) {
+                          setHasDueDate(true)
+                        }
+                      }}
+                      placeholder="dd-mm-yyyy"
+                      className="px-3 py-1.5 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] font-medium"
+                    />
+                    {dueDate && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDueDate('')
+                          setHasDueDate(false)
+                        }}
+                        title="Clear Due Date"
+                        className="text-[10px] font-bold text-gray-400 hover:text-red-600 px-1 transition-colors cursor-pointer"
+                      >
+                        ✕ Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1101,13 +1439,44 @@ export default function CreateBillPage({ setActiveRoute }) {
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">Billing Address</label>
                   <textarea
-                    rows={3}
+                    rows={2}
                     value={customerAddress}
                     onChange={(e) => setCustomerAddress(e.target.value)}
                     placeholder="Enter billing address"
-                    className="w-full px-4 py-3 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500 font-medium resize-none"
+                    className="w-full px-4 py-2.5 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500 font-medium resize-none"
                   />
                 </div>
+
+                {/* Delivery Address Checkbox (Same as billing address) */}
+                <div className="pt-1">
+                  <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={sameAsDelivery}
+                      onChange={(e) => setSameAsDelivery(e.target.checked)}
+                      className="w-4 h-4 text-[#043486] rounded-none focus:ring-0 cursor-pointer accent-[#043486]"
+                    />
+                    <span className="text-xs font-bold text-gray-700 dark:text-slate-200">
+                      Delivery address same as billing address
+                    </span>
+                  </label>
+                </div>
+
+                {/* Delivery Address Textarea (Visible if unchecked) */}
+                {!sameAsDelivery && (
+                  <div className="animate-in fade-in duration-150">
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200 mb-1.5">
+                      Delivery / Shipping Address <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={deliveryAddress}
+                      onChange={(e) => setDeliveryAddress(e.target.value)}
+                      placeholder="Enter separate delivery / shipping address"
+                      className="w-full px-4 py-2.5 text-sm text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 placeholder:text-gray-400 dark:placeholder:text-slate-500 font-medium resize-none"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1129,6 +1498,19 @@ export default function CreateBillPage({ setActiveRoute }) {
               </div>
 
               <div className="space-y-3 text-sm">
+                {totalDiscountSavings > 0 && (
+                  <>
+                    <div className="flex items-center justify-between text-gray-600 dark:text-slate-400 text-xs">
+                      <span>Gross Amount</span>
+                      <span className="font-mono text-gray-800 dark:text-slate-200">₹ {totalGrossOrigAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                      <span>Discount Savings</span>
+                      <span className="font-mono">- ₹ {totalDiscountSavings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </>
+                )}
+
                 <div className="flex items-center justify-between text-gray-600 dark:text-slate-400">
                   <span>Taxable Amount</span>
                   <span className="font-medium font-mono text-gray-900 dark:text-white">₹ {taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -1201,17 +1583,28 @@ export default function CreateBillPage({ setActiveRoute }) {
                   ) : (
                     <Save size={16} />
                   )}
-                  <span>Save Invoice (Ctrl+Enter)</span>
+                  <span>{isEditMode ? 'Update Invoice (Ctrl+Enter)' : 'Save Invoice (Ctrl+Enter)'}</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="w-full flex items-center justify-center gap-2 py-2 border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 font-medium text-xs rounded-none hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  <RotateCcw size={13} />
-                  <span>Reset Form (Alt+R)</span>
-                </button>
+                {isEditMode ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/outward-list')}
+                    className="w-full flex items-center justify-center gap-2 py-2 border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 font-medium text-xs rounded-none hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <ArrowLeft size={13} />
+                    <span>Cancel &amp; Back to List</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="w-full flex items-center justify-center gap-2 py-2 border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 font-medium text-xs rounded-none hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Reset Form (Alt+R)</span>
+                  </button>
+                )}
               </div>
 
             </div>
@@ -1271,9 +1664,22 @@ export default function CreateBillPage({ setActiveRoute }) {
 
                   {/* 2. Product / Material Search & Select Dropdown (Massive Expanded Width) */}
                   <div className="flex-1 min-w-[260px]">
-                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">
-                      Item Name <span className="text-blue-500">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400">
+                        Item Name <span className="text-blue-500">*</span>
+                        {item.material_id && item.current_stock !== null && item.current_stock !== undefined && (
+                          <span className={`ml-2 text-[10.5px] font-bold ${
+                            parseFloat(item.current_stock) <= 0 
+                              ? 'text-red-500' 
+                              : 'text-emerald-600 dark:text-emerald-400'
+                          }`}>
+                            {parseFloat(item.current_stock) <= 0 
+                              ? '(0 in Stock - Out of Stock)' 
+                              : `(Available: ${item.current_stock} ${item.unit || 'NOS'})`}
+                          </span>
+                        )}
+                      </label>
+                    </div>
                     <SearchableSelect
                       options={getMaterialOptionsForRow(item.category_id, item.hsn_code)}
                       value={item.material_id || ''}
@@ -1284,6 +1690,23 @@ export default function CreateBillPage({ setActiveRoute }) {
                           : (item.hsn_code ? `Select product for HSN "${item.hsn_code}"...` : 'Search & select product / item...')
                       }
                     />
+
+                    {/* Stock Validations Warning Message Under Input Field (Only for error/warning states) */}
+                    {item.material_id && item.current_stock !== null && item.current_stock !== undefined && (
+                      <>
+                        {parseFloat(item.current_stock) <= 0 ? (
+                          <div className="mt-1 flex items-center gap-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 px-2.5 py-0.5 border border-red-200 dark:border-red-900 animate-pulse">
+                            <AlertCircle size={12} className="shrink-0 text-red-500" />
+                            <span>⚠️ Out of Stock! (0 {item.unit || 'NOS'} in inventory)</span>
+                          </div>
+                        ) : (parseFloat(item.quantity) || 1) > parseFloat(item.current_stock) ? (
+                          <div className="mt-1 flex items-center gap-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 px-2.5 py-0.5 border border-red-200 dark:border-red-900">
+                            <AlertCircle size={12} className="shrink-0 text-red-500" />
+                            <span>⚠️ Insufficient Stock! Only ${item.current_stock} ${item.unit || 'NOS'} available (Billed: ${item.quantity})</span>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
                   </div>
 
                   {/* 3. HSN / SAC */}
@@ -1315,7 +1738,11 @@ export default function CreateBillPage({ setActiveRoute }) {
                         onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                         title="Quantity"
                         placeholder="Qty"
-                        className="w-20 px-2 py-2.5 text-xs text-center font-bold text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 h-[41px]"
+                        className={`w-20 px-2 py-2.5 text-xs text-center font-bold bg-white dark:bg-slate-900 border rounded-none focus:outline-none h-[41px] ${
+                          item.material_id && item.current_stock !== null && (parseFloat(item.current_stock) <= 0 || (parseFloat(item.quantity) || 1) > parseFloat(item.current_stock))
+                            ? 'border-red-500 text-red-600 dark:text-red-400 focus:border-red-600 bg-red-50/20'
+                            : 'text-[#292424] dark:text-white border-gray-300 dark:border-slate-700 focus:border-[#043486] dark:focus:border-blue-500'
+                        }`}
                       />
                       <input
                         type="text"
@@ -1527,13 +1954,31 @@ export default function CreateBillPage({ setActiveRoute }) {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-gray-200 dark:border-slate-800 items-end">
                   {/* Rate (Base Price - Non-editable from material) */}
                   <div>
-                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">Rate (₹)</label>
-                    <input
-                      type="text"
-                      value={Number(item.rate || 0).toFixed(2)}
-                      readOnly
-                      className="w-full px-3 py-2.5 text-xs font-semibold text-right font-mono text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-none cursor-not-allowed select-none focus:outline-none h-[41px]"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400">
+                          {item.has_discount ? 'Discounted Rate (₹)' : 'Rate (₹)'}
+                        </label>
+                        {item.has_discount && (
+                          <span className="text-[10px] text-gray-400 dark:text-slate-500 font-mono font-medium">
+                            (Orig: <span className="line-through text-gray-400">₹{Number(item.original_rate || item.rate || 0).toFixed(2)}</span> -₹{Number(item.discount_amount || 0).toFixed(2)})
+                          </span>
+                        )}
+                      </div>
+                      {item.has_discount && (
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                          {item.discount_percent}% OFF
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={Number(item.rate || 0).toFixed(2)}
+                        readOnly
+                        className="w-full px-3 py-2.5 text-xs font-semibold text-right font-mono text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-none cursor-not-allowed select-none focus:outline-none h-[41px]"
+                      />
+                    </div>
                   </div>
 
                   {/* Tax % */}

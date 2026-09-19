@@ -53,6 +53,8 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
     mrp: '',
     hsn_code: '',
     tax_inclusive: true,
+    has_discount: false,
+    discount_percent: '',
     opening_stock: '',
     reorder_level: '',
     barcode: '',
@@ -131,6 +133,8 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
           mrp: m.mrp ? String(m.mrp) : '',
           hsn_code: m.hsn_code || '',
           tax_inclusive: Boolean(m.tax_inclusive),
+          has_discount: Boolean(m.has_discount),
+          discount_percent: m.discount_percent ? String(m.discount_percent) : '',
           opening_stock: m.opening_stock ? String(m.opening_stock) : '',
           reorder_level: m.reorder_level ? String(m.reorder_level) : '',
           barcode: m.barcode || '',
@@ -202,6 +206,8 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
       mrp: '',
       hsn_code: '',
       tax_inclusive: true,
+      has_discount: false,
+      discount_percent: '',
       opening_stock: '',
       reorder_level: '',
       barcode: '',
@@ -580,6 +586,66 @@ export default function AddMaterialPage({ editMaterialId = null, onSaved, setAct
                   />
                 </div>
                 <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1">Printed maximum retail price (optional)</p>
+              </div>
+
+              {/* Discount Checkbox & Percentage Input */}
+              <div className="md:col-span-2 p-3.5 bg-gray-50/70 dark:bg-slate-950/60 border border-gray-200 dark:border-slate-800 rounded-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      name="has_discount"
+                      checked={Boolean(formData.has_discount)}
+                      onChange={(e) => setFormData(p => ({ ...p, has_discount: e.target.checked }))}
+                      className="w-4 h-4 text-[#043486] rounded-none focus:ring-0 cursor-pointer accent-[#043486]"
+                    />
+                    <div>
+                      <span className="text-xs sm:text-sm font-semibold text-[#292424] dark:text-white">
+                        Enable Discount
+                      </span>
+                      <span className="text-[11px] text-gray-500 dark:text-slate-400 block sm:inline sm:ml-1.5">
+                        (Specify a discount percentage on the selling price)
+                      </span>
+                    </div>
+                  </label>
+
+                  {formData.has_discount && (
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold text-gray-700 dark:text-slate-200 whitespace-nowrap">
+                        Discount (%):
+                      </label>
+                      <div className="relative w-36">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          name="discount_percent"
+                          value={formData.discount_percent}
+                          onKeyDown={blockNegativeKeys}
+                          onChange={handlePositiveNumberChange}
+                          placeholder="e.g. 10"
+                          className="w-full px-3 py-1.5 pr-7 text-xs sm:text-sm font-bold text-[#292424] dark:text-white bg-white dark:bg-slate-950 border border-gray-300 dark:border-slate-700 rounded-sm focus:outline-none focus:border-[#0248BC] dark:focus:border-blue-500 focus:ring-1 focus:ring-[#0248BC]"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
+                          %
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {formData.has_discount && formData.selling_price && formData.discount_percent && (
+                  <div className="mt-2.5 pt-2 border-t border-gray-200 dark:border-slate-800 text-[11px] text-gray-600 dark:text-slate-400 flex items-center gap-4">
+                    <span>
+                      Original Price: <strong className="text-gray-800 dark:text-gray-200">₹{parseFloat(formData.selling_price || 0).toFixed(2)}</strong>
+                    </span>
+                    <span>
+                      Discount: <strong className="text-amber-600 dark:text-amber-400">{formData.discount_percent}% (-₹{(parseFloat(formData.selling_price || 0) * (parseFloat(formData.discount_percent || 0) / 100)).toFixed(2)})</strong>
+                    </span>
+                    <span>
+                      Discounted Price (Pre-Tax): <strong className="text-emerald-600 dark:text-emerald-400 font-bold">₹{(parseFloat(formData.selling_price || 0) * (1 - parseFloat(formData.discount_percent || 0) / 100)).toFixed(2)}</strong>
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* HSN Code */}

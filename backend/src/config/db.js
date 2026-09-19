@@ -247,7 +247,7 @@ export async function initDatabase() {
           await pool.query(`ALTER TABLE settings ADD COLUMN service_separator VARCHAR(10) DEFAULT '/';`)
         } catch {}
 
-        // Ensure customer_email, customer_type, receipt_number columns exist in bills
+        // Ensure customer_email, customer_type, receipt_number, delivery_address, same_as_billing, due_date, has_due_date columns exist in bills
         try {
           await pool.query(`ALTER TABLE bills ADD COLUMN customer_email VARCHAR(191) NULL AFTER customer_phone;`)
         } catch {}
@@ -256,6 +256,45 @@ export async function initDatabase() {
         } catch {}
         try {
           await pool.query(`ALTER TABLE bills ADD COLUMN receipt_number VARCHAR(100) NULL AFTER invoice_number;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE bills ADD COLUMN delivery_address TEXT NULL AFTER customer_address;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE bills ADD COLUMN same_as_billing BOOLEAN DEFAULT TRUE AFTER delivery_address;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE bills ADD COLUMN due_date DATE NULL AFTER invoice_date;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE bills ADD COLUMN has_due_date BOOLEAN DEFAULT TRUE AFTER due_date;`)
+        } catch {}
+
+        // Ensure materials table has discount columns
+        try {
+          await pool.query(`ALTER TABLE materials ADD COLUMN has_discount BOOLEAN DEFAULT FALSE AFTER tax_inclusive;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE materials ADD COLUMN discount_percent DECIMAL(5, 2) DEFAULT 0.00 AFTER has_discount;`)
+        } catch {}
+
+        // Ensure bill_items table has discount columns
+        try {
+          await pool.query(`ALTER TABLE bill_items ADD COLUMN has_discount BOOLEAN DEFAULT FALSE AFTER rate;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE bill_items ADD COLUMN discount_percent DECIMAL(5, 2) DEFAULT 0.00 AFTER has_discount;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE bill_items ADD COLUMN discount_amount DECIMAL(12, 2) DEFAULT 0.00 AFTER discount_percent;`)
+        } catch {}
+        try {
+          await pool.query(`ALTER TABLE bill_items ADD COLUMN original_rate DECIMAL(12, 2) DEFAULT 0.00 AFTER discount_amount;`)
+        } catch {}
+
+        // Ensure settings table has due_date_days column
+        try {
+          await pool.query(`ALTER TABLE settings ADD COLUMN due_date_days INT DEFAULT 15 AFTER return_days;`)
         } catch {}
 
         // Ensure materials and bill_items have return_policy column

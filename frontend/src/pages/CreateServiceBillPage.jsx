@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import {
   Wrench,
@@ -65,6 +66,11 @@ const INDIAN_STATES = [
 ]
 
 export default function CreateServiceBillPage({ setActiveRoute }) {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const editId = searchParams.get('editId')
+  const isEditMode = Boolean(editId)
+
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -126,7 +132,76 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
         setCustomTaxRate(cgst + sgst)
       }
 
-      await fetchNextServiceNumber()
+      if (isEditMode) {
+        const editRes = await fetch(API_ENDPOINTS.SERVICE_BY_ID(editId))
+        const editData = await editRes.json()
+        if (editData.success && editData.service) {
+          const s = editData.service
+          setServiceNumber(s.service_number || '')
+          setServiceDate(s.service_date ? s.service_date.split('T')[0] : new Date().toISOString().split('T')[0])
+          setServiceType(s.service_type || 'GST')
+          setCopyType(s.copy_type || 'ORIGINAL')
+          setPlaceOfSupply(s.place_of_supply || '33 - Tamil Nadu')
+          setCustomerType(s.customer_type || 'Individual')
+          setCustomerName(s.customer_name || '')
+          setCustomerPhone(s.customer_phone || '')
+          setCustomerEmail(s.customer_email || '')
+          setCustomerAddress(s.customer_address || '')
+          setCustomerGstin(s.customer_gstin || '')
+          setPaymentMode(s.payment_mode || '')
+          setServiceStatus(s.service_status || 'Received')
+          setNotes(s.notes || '')
+
+          if (s.cgst_rate && s.sgst_rate) {
+            setCustomTaxRate(parseFloat(s.cgst_rate) + parseFloat(s.sgst_rate))
+          }
+
+          if (s.items && s.items.length > 0) {
+            setItems(
+              s.items.map((it) => {
+                let serials = ['']
+                if (it.serial_numbers) {
+                  try {
+                    serials = typeof it.serial_numbers === 'string' && it.serial_numbers.startsWith('[')
+                      ? JSON.parse(it.serial_numbers)
+                      : it.serial_numbers.split(',').map((x) => x.trim())
+                  } catch {
+                    serials = it.serial_numbers.split(',').map((x) => x.trim())
+                  }
+                } else if (it.serial_number) {
+                  serials = it.serial_number.split(',').map((x) => x.trim())
+                }
+                return {
+                  material_id: it.material_id || '',
+                  product_name: it.product_name || it.item_name || '',
+                  brand_model: it.brand_model || '',
+                  issue_description: it.issue_description || '',
+                  quantity: parseFloat(it.quantity) || 1,
+                  unit: it.unit || 'NOS',
+                  rate: parseFloat(it.rate) || 0,
+                  hsn_code: it.hsn_code || '9987',
+                  tax_rate: parseFloat(it.tax_rate) || 18.0,
+                  tax_amount: parseFloat(it.tax_amount) || 0,
+                  amount: parseFloat(it.amount) || 0,
+                  has_serial: Boolean(it.has_serial || (serials.length > 0 && serials[0])),
+                  serial_numbers: serials.length > 0 ? serials : [''],
+                  return_policy: Boolean(it.return_policy)
+                }
+              })
+            )
+          }
+        } else {
+          Swal.fire({
+            icon: 'error',
+            title: 'Not Found',
+            text: 'Service request record could not be found for editing.',
+            confirmButtonColor: '#043486'
+          })
+          navigate('/services/list')
+        }
+      } else {
+        await fetchNextServiceNumber()
+      }
     } catch (err) {
       console.error('Error loading initial service data:', err)
     } finally {
@@ -148,7 +223,7 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
 
   useEffect(() => {
     loadInitialData()
-  }, [])
+  }, [editId])
 
   // Place of Supply Change Handler
   const handlePlaceOfSupplyChange = (value) => {
@@ -555,8 +630,11 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
         }))
       }
 
-      const res = await fetch(API_ENDPOINTS.SERVICES, {
-        method: 'POST',
+      const url = isEditMode ? API_ENDPOINTS.SERVICE_BY_ID(editId) : API_ENDPOINTS.SERVICES
+      const method = isEditMode ? 'PUT' : 'POST'
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
@@ -564,12 +642,12 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
       const data = await res.json()
 
       if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Failed to save service request.')
+        throw new Error(data.message || (isEditMode ? 'Failed to update service request.' : 'Failed to save service request.'))
       }
 
       const savedServiceData = {
         ...payload,
-        id: data.serviceId || data.id,
+        id: isEditMode ? editId : (data.serviceId || data.id),
         items: validItems.map((it) => ({
           ...it,
           item_name: it.product_name.trim(),
@@ -588,23 +666,27 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
       // 2. Alert user
       Swal.fire({
         icon: 'success',
-        title: 'Service Request Created Successfully!',
-        text: `Service #${serviceNumber} saved. Auto-opening print & resetting...`,
+        title: isEditMode ? 'Service Request Updated Successfully!' : 'Service Request Created Successfully!',
+        text: `Service #${serviceNumber} ${isEditMode ? 'updated' : 'saved'}. Auto-opening print...`,
         showConfirmButton: false,
         timer: 1200
       })
 
-      // 3. Print and auto-clear form
+      // 3. Print and redirect / reset
       setTimeout(() => {
         window.print()
-        handleReset()
+        if (isEditMode) {
+          navigate('/services/list')
+        } else {
+          handleReset()
+        }
       }, 450)
     } catch (err) {
       console.error('Error saving service bill:', err)
       Swal.fire({
         icon: 'error',
-        title: 'Save Failed',
-        text: err.message || 'Failed to create service request.',
+        title: isEditMode ? 'Update Failed' : 'Save Failed',
+        text: err.message || 'Failed to save service request.',
         confirmButtonColor: '#043486'
       })
     } finally {
@@ -619,10 +701,12 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-[#292424] dark:text-white uppercase flex items-center gap-2.5">
             <Wrench className="text-[#043486] dark:text-blue-400" size={22} />
-            <span>NEW SERVICE REQUEST</span>
+            <span>{isEditMode ? `EDIT SERVICE REQUEST (${serviceNumber})` : 'NEW SERVICE REQUEST'}</span>
           </h1>
           <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-            Record incoming service products, models, reported issues &amp; repair estimates
+            {isEditMode
+              ? 'Update existing service job specifications, customer data, and line items'
+              : 'Record incoming service products, models, reported issues & repair estimates'}
           </p>
         </div>
 
@@ -632,17 +716,21 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
             <span>›</span>
             <span>Services</span>
             <span>›</span>
-            <span className="text-[#043486] dark:text-blue-400 font-semibold">New Request</span>
+            <span className="text-[#043486] dark:text-blue-400 font-semibold">
+              {isEditMode ? 'Edit Request' : 'New Request'}
+            </span>
           </div>
 
-          {setActiveRoute && (
-            <button
-              onClick={() => setActiveRoute('all-services')}
-              className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <span>Service List</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (setActiveRoute) setActiveRoute('all-services')
+              navigate('/services/list')
+            }}
+            className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <span>Service List</span>
+          </button>
         </div>
       </div>
 
@@ -993,16 +1081,22 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
                   ) : (
                     <Save size={16} />
                   )}
-                  <span>Save Service Request (Ctrl+Enter)</span>
+                  <span>{isEditMode ? 'Update Service Request (Ctrl+Enter)' : 'Save Service Request (Ctrl+Enter)'}</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={handleReset}
+                  onClick={() => {
+                    if (isEditMode) {
+                      navigate('/services/list')
+                    } else {
+                      handleReset()
+                    }
+                  }}
                   className="w-full flex items-center justify-center gap-2 py-2 border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 font-medium text-xs rounded-none hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   <RotateCcw size={13} />
-                  <span>Reset Form (Alt+R)</span>
+                  <span>{isEditMode ? 'Cancel Edit / Back to List' : 'Reset Form (Alt+R)'}</span>
                 </button>
               </div>
             </div>
@@ -1041,16 +1135,16 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
                   className="p-4 rounded-none border border-gray-300 dark:border-slate-800 bg-gray-50/60 dark:bg-slate-950/60 hover:border-[#043486] dark:hover:border-blue-600 transition-all space-y-3"
                 >
                   {/* Main Service Row (Horizontal Layout) */}
-                  <div className="flex flex-col lg:flex-row items-stretch lg:items-end gap-3">
+                  <div className="flex flex-col lg:flex-row items-stretch lg:items-end gap-2.5">
                     {/* 1. Item Index */}
                     <div className="shrink-0 flex items-center">
-                      <span className="w-9 h-[41px] bg-[#043486] text-white text-xs font-bold flex items-center justify-center shrink-0">
+                      <span className="w-8 h-[38px] bg-[#043486] text-white text-xs font-bold flex items-center justify-center shrink-0">
                         {index + 1}
                       </span>
                     </div>
 
                     {/* 2. Product Name (e.g. Laptop, Monitor, Printer) */}
-                    <div className="flex-1 min-w-[180px]">
+                    <div className="flex-[1.4] min-w-[120px]">
                       <label className="block text-[11px] font-semibold text-gray-600 dark:text-slate-300 mb-1">
                         Product <span className="text-blue-500">*</span>
                       </label>
@@ -1060,12 +1154,12 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
                         value={item.product_name}
                         onChange={(e) => handleItemChange(index, 'product_name', e.target.value)}
                         placeholder="Enter Product name"
-                        className="w-full px-3 py-2 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-semibold h-[41px]"
+                        className="w-full px-2.5 py-1.5 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-semibold h-[38px]"
                       />
                     </div>
 
                     {/* 3. Brand / Model (e.g. Dell Inspiron 15, HP LaserJet) */}
-                    <div className="flex-1 min-w-[180px]">
+                    <div className="flex-1 min-w-[100px]">
                       <label className="block text-[11px] font-semibold text-gray-600 dark:text-slate-300 mb-1">
                         Brand / Model
                       </label>
@@ -1074,12 +1168,12 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
                         value={item.brand_model}
                         onChange={(e) => handleItemChange(index, 'brand_model', e.target.value)}
                         placeholder="Brand / Model"
-                        className="w-full px-3 py-2 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-medium h-[41px]"
+                        className="w-full px-2.5 py-1.5 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-medium h-[38px]"
                       />
                     </div>
 
                     {/* 4. Issue / Reported Problem */}
-                    <div className="flex-1 min-w-[200px]">
+                    <div className="flex-1 min-w-[100px]">
                       <label className="block text-[11px] font-semibold text-gray-600 dark:text-slate-300 mb-1">
                         Issue
                       </label>
@@ -1088,12 +1182,12 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
                         value={item.issue_description}
                         onChange={(e) => handleItemChange(index, 'issue_description', e.target.value)}
                         placeholder="Enter issue"
-                        className="w-full px-3 py-2 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-medium h-[41px]"
+                        className="w-full px-2.5 py-1.5 text-xs text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-medium h-[38px]"
                       />
                     </div>
 
                     {/* 5. Quantity */}
-                    <div className="w-full sm:w-20 shrink-0">
+                    <div className="w-full sm:w-16 shrink-0">
                       <label className="block text-[11px] font-semibold text-gray-600 dark:text-slate-300 mb-1 text-center">
                         Qty
                       </label>
@@ -1103,12 +1197,12 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
                         step="1"
                         value={item.quantity}
                         onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                        className="w-full px-2 py-2 text-xs text-center font-bold text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 h-[41px]"
+                        className="w-full px-1.5 py-1.5 text-xs text-center font-bold text-[#292424] dark:text-white bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 h-[38px]"
                       />
                     </div>
 
                     {/* 6. Rate (₹) */}
-                    <div className="w-full sm:w-28 shrink-0">
+                    <div className="w-full sm:w-24 shrink-0">
                       <label className="block text-[11px] font-semibold text-gray-600 dark:text-slate-300 mb-1 text-right">
                         Rate (₹)
                       </label>
@@ -1119,16 +1213,16 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
                         value={item.rate}
                         onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
                         placeholder="0.00"
-                        className="w-full px-3 py-2 text-xs text-right font-bold text-[#043486] dark:text-blue-400 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-mono h-[41px]"
+                        className="w-full px-2 py-1.5 text-xs text-right font-bold text-[#043486] dark:text-blue-400 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-none focus:outline-none focus:border-[#043486] dark:focus:border-blue-500 font-mono h-[38px]"
                       />
                     </div>
 
                     {/* 7. Amount (₹) */}
-                    <div className="w-full sm:w-32 shrink-0">
+                    <div className="w-full sm:w-28 shrink-0">
                       <label className="block text-[11px] font-semibold text-gray-600 dark:text-slate-300 mb-1 text-right">
                         Amount (₹)
                       </label>
-                      <div className="px-3 py-2 text-xs text-right font-black text-gray-900 dark:text-white bg-gray-100 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-none font-mono h-[41px] flex items-center justify-end">
+                      <div className="px-2 py-1.5 text-xs text-right font-black text-gray-900 dark:text-white bg-gray-100 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-none font-mono h-[38px] flex items-center justify-end">
                         ₹{' '}
                         {parseFloat(item.amount || 0).toLocaleString('en-IN', {
                           minimumFractionDigits: 2,
@@ -1138,22 +1232,22 @@ export default function CreateServiceBillPage({ setActiveRoute }) {
                     </div>
 
                     {/* 8. Actions (Duplicate & Delete) */}
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
                         onClick={() => handleDuplicateItem(index)}
                         title="Duplicate Row"
-                        className="p-2.5 text-gray-500 hover:text-blue-600 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 hover:border-blue-500 transition-colors h-[41px] flex items-center justify-center cursor-pointer"
+                        className="w-[38px] h-[38px] text-gray-500 hover:text-blue-600 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 hover:border-blue-500 transition-colors flex items-center justify-center cursor-pointer shrink-0"
                       >
-                        <Copy size={15} />
+                        <Copy size={14} />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleRemoveItem(index)}
                         title="Delete Row"
-                        className="p-2.5 text-gray-500 hover:text-red-600 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 hover:border-red-500 transition-colors h-[41px] flex items-center justify-center cursor-pointer"
+                        className="w-[38px] h-[38px] text-gray-500 hover:text-red-600 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 hover:border-red-500 transition-colors flex items-center justify-center cursor-pointer shrink-0"
                       >
-                        <Trash2 size={15} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>

@@ -77,6 +77,8 @@ export default function InvoiceTemplate({ bill, settings }) {
   const totalQty = items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0)
   const totalTaxAmt = isGstInvoice ? items.reduce((sum, it) => sum + (parseFloat(it.tax_amount) || 0), 0) : 0
   const totalGrossAmt = items.reduce((sum, it) => sum + (parseFloat(it.amount) || (parseFloat(it.quantity || 0) * parseFloat(it.rate || 0))), 0)
+  const totalDiscountSavings = items.reduce((sum, it) => sum + ((parseFloat(it.discount_amount) || 0) * (parseFloat(it.quantity) || 1)), 0)
+  const totalGrossOrigAmt = items.reduce((sum, it) => sum + (((parseFloat(it.original_rate) || parseFloat(it.rate) || 0)) * (parseFloat(it.quantity) || 1)), 0)
 
   // Format date helper (e.g. 15 Sept 2026)
   const formatDate = (dateStr) => {
@@ -159,76 +161,100 @@ export default function InvoiceTemplate({ bill, settings }) {
             {/* Invoice Meta Bar */}
             <div className="bg-[#f3f4f6] border border-gray-300 px-3.5 py-1.5 flex items-center justify-between text-xs font-bold text-[#292424]">
               <div className="flex items-center gap-1.5">
-                <span className="text-gray-600 uppercase font-semibold text-[10.5px]">SALES NUMBER:</span>
+                <span className="text-gray-600 uppercase font-semibold text-[10.5px]">SALES INVOICE NUMBER:</span>
                 <span className="text-[#292424] font-mono text-sm font-black">{bill.invoice_number}</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-600 uppercase font-semibold text-[10.5px]">SALES DATE:</span>
-                <span className="text-[#292424] font-semibold text-[11.5px]">{formatDate(bill.invoice_date)}</span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-600 uppercase font-semibold text-[10.5px]">SALES DATE:</span>
+                  <span className="text-[#292424] font-semibold text-[11.5px]">{formatDate(bill.invoice_date)}</span>
+                </div>
+                {bill.due_date && (
+                  <div className="flex items-center gap-1.5 pl-3 border-l border-gray-300">
+                    <span className="text-rose-700 uppercase font-bold text-[10.5px]">DUE DATE:</span>
+                    <span className="text-rose-800 font-black text-[11.5px]">{formatDate(bill.due_date)}</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Customer Bill To Details (With Copy Type on Right Side) */}
+            {/* Customer Details Box: Two Columns (BILL TO & SHIP TO / DELIVERY ADDRESS) */}
             <div className="border border-gray-300 p-2.5 bg-white/80 text-[#292424]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <span className="text-[9.5px] font-black text-[#292424] uppercase tracking-wider block mb-0.5">
-                    BILL TO
+              <div className="grid grid-cols-2 gap-4">
+                
+                {/* Left Column: BILL TO (BUYER) */}
+                <div className="space-y-0.5 border-r border-gray-200 pr-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="text-[9.5px] font-black text-[#043486] uppercase tracking-wider block mb-0.5">
+                        BILL TO (BUYER)
+                      </span>
+                      <h3 className="text-[12.5px] font-bold text-[#292424]">
+                        {bill.customer_name}
+                      </h3>
+                    </div>
+                    {/* Copy Type Tag */}
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-[#292424] bg-gray-100 border border-gray-300 px-2 py-0.5 inline-block shrink-0">
+                      {bill.copy_type === 'DUPLICATE' ? 'DUPLICATE' : (bill.copy_type === 'TRIPLICATE' ? 'TRIPLICATE' : 'ORIGINAL')}
+                    </span>
+                  </div>
+
+                  {bill.customer_address && (
+                    <p className="text-[10px] text-gray-700 leading-snug whitespace-pre-line mt-0.5">
+                      {bill.customer_address}
+                    </p>
+                  )}
+                  <div className="space-y-0.5 pt-1 text-[10px] font-medium text-gray-700">
+                    {bill.customer_phone && (
+                      <div><strong>Mobile:</strong> <span className="font-mono text-[#292424]">{bill.customer_phone}</span></div>
+                    )}
+                    {bill.customer_email && (
+                      <div><strong>Email:</strong> <span className="text-[#292424]">{bill.customer_email}</span></div>
+                    )}
+                    <div><strong>Place of Supply:</strong> <span className="text-[#292424]">{bill.place_of_supply || '33-Tamil Nadu'}</span></div>
+                    {bill.customer_gstin && (
+                      <div><strong>GSTIN:</strong> <span className="font-mono font-bold uppercase text-[#292424]">{bill.customer_gstin}</span></div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Column: SHIP TO / DELIVERY ADDRESS */}
+                <div className="space-y-0.5 pl-1">
+                  <span className="text-[9.5px] font-black text-[#043486] uppercase tracking-wider block mb-0.5">
+                    SHIP TO / DELIVERY ADDRESS
                   </span>
-                  <h3 className="text-[13px] font-bold text-[#292424]">
+                  <h3 className="text-[12.5px] font-bold text-[#292424]">
                     {bill.customer_name}
                   </h3>
+                  <p className="text-[10px] text-gray-700 leading-snug whitespace-pre-line mt-0.5">
+                    {bill.delivery_address && bill.delivery_address.trim() ? bill.delivery_address : (bill.customer_address || 'Same as billing address')}
+                  </p>
+                  <div className="space-y-0.5 pt-1 text-[10px] font-medium text-gray-700">
+                    {bill.customer_phone && (
+                      <div><strong>Contact:</strong> <span className="font-mono text-[#292424]">{bill.customer_phone}</span></div>
+                    )}
+                    <div><strong>Destination:</strong> <span className="text-[#292424]">{bill.place_of_supply || '33-Tamil Nadu'}</span></div>
+                    <div className="text-[9px] text-gray-500 italic pt-0.5">
+                      {(!bill.delivery_address || bill.same_as_billing || bill.delivery_address === bill.customer_address) ? '✓ Same as billing address' : '✓ Separate Delivery Destination'}
+                    </div>
+                  </div>
                 </div>
 
-                {/* Copy Type Tag */}
-                <div className="text-right shrink-0">
-                  <span className="text-[9.5px] font-bold uppercase tracking-widest text-[#292424] bg-gray-100 border border-gray-300 px-2.5 py-0.5 inline-block">
-                    {bill.copy_type === 'DUPLICATE' ? 'DUPLICATE' : (bill.copy_type === 'TRIPLICATE' ? 'TRIPLICATE' : 'ORIGINAL')}
-                  </span>
-                </div>
-              </div>
-
-              {bill.customer_address && (
-                <p className="text-[10.5px] text-gray-700 leading-snug whitespace-pre-line mt-0.5">
-                  {bill.customer_address}
-                </p>
-              )}
-              <div className="space-y-0.5 pt-1 text-[10.5px] font-medium text-gray-700">
-                {bill.customer_phone && (
-                  <div>
-                    <strong>Mobile:</strong> <span className="font-mono text-[#292424]">{bill.customer_phone}</span>
-                  </div>
-                )}
-                {bill.customer_email && (
-                  <div>
-                    <strong>Email:</strong> <span className="text-[#292424]">{bill.customer_email}</span>
-                  </div>
-                )}
-                <div>
-                  <strong>Place of Supply:</strong> <span className="text-[#292424]">{bill.place_of_supply || '33-Tamil Nadu'}</span>
-                </div>
-                <div>
-                  <strong>Customer Type:</strong> <span className="text-[#292424]">{bill.customer_type || 'Individual'}</span>
-                </div>
-                {bill.customer_gstin && (
-                  <div>
-                    <strong>Customer GSTIN:</strong> <span className="font-mono font-bold uppercase text-[#292424]">{bill.customer_gstin}</span>
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* --- DYNAMIC LINE ITEMS TABLE (ONLY ACTUAL ROWS) --- */}
+            {/* --- DYNAMIC LINE ITEMS TABLE (WITH DEDICATED DISC % COLUMN) --- */}
             <div className="border border-gray-300 overflow-hidden text-[#292424]">
               <table className="w-full text-left border-collapse text-[10.5px]">
                 <thead>
                   <tr className="bg-[#f3f4f6] border-b border-gray-300 text-[9.5px] font-black uppercase text-[#292424]">
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[6%]">S.NO</th>
-                    <th className="py-1.5 px-2.5 border-r border-gray-300 w-[38%]">ITEMS</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[12%]">HSN/SAC</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[10%]">QTY</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[11%]">RATE (₹)</th>
-                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[11%]">TAX</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[5%]">S.NO</th>
+                    <th className="py-1.5 px-2.5 border-r border-gray-300 w-[33%]">ITEMS</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[11%]">HSN/SAC</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[9%]">QTY</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-center w-[8%]">DISC (%)</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[12%]">RATE (₹)</th>
+                    <th className="py-1.5 px-2 border-r border-gray-300 text-right w-[10%]">TAX</th>
                     <th className="py-1.5 px-2.5 text-right w-[12%]">AMOUNT (₹)</th>
                   </tr>
                 </thead>
@@ -264,8 +290,22 @@ export default function InvoiceTemplate({ bill, settings }) {
                       <td className="py-2 px-2 border-r border-gray-300 text-center font-semibold align-top text-[#292424]">
                         {formatQty(item.quantity)} Unit
                       </td>
+                      <td className="py-2 px-2 border-r border-gray-300 text-center font-mono align-top">
+                        {(item.has_discount || parseFloat(item.discount_percent || 0) > 0) ? (
+                          <span className="font-bold text-emerald-700">
+                            {parseFloat(item.discount_percent || 0)}%
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className="py-2 px-2 border-r border-gray-300 text-right font-mono align-top text-[#292424]">
-                        ₹ {parseFloat(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <div>₹ {parseFloat(item.rate || item.original_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        {(item.has_discount || parseFloat(item.discount_percent || 0) > 0) && (
+                          <div className="text-[8.5px] text-gray-400 line-through">
+                            ₹ {parseFloat(item.original_rate || item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        )}
                       </td>
                       <td className="py-2 px-2 border-r border-gray-300 text-right font-mono align-top text-gray-700 text-[9.5px]">
                         {isGstInvoice && parseFloat(item.tax_amount || 0) > 0 ? (
@@ -291,6 +331,7 @@ export default function InvoiceTemplate({ bill, settings }) {
                       <td colSpan={2} className="py-1.5 px-2.5 border-r border-gray-300 uppercase text-[#292424]">SUB TOTAL</td>
                       <td className="border-r border-gray-300" />
                       <td className="py-1.5 px-2 border-r border-gray-300 text-center font-mono text-[#292424]">{formatQty(totalQty)} Unit</td>
+                      <td className="border-r border-gray-300" />
                       <td className="border-r border-gray-300" />
                       <td className="py-1.5 px-2 border-r border-gray-300 text-right font-mono text-gray-800">
                         ₹ {totalTaxAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -357,10 +398,27 @@ export default function InvoiceTemplate({ bill, settings }) {
                   )}
                 </div>
 
-                {/* Right Column (4/12): Tax Breakdown, Totals & Signatory */}
+                {/* Right Column (4/12): Tax Breakdown, Discount Savings & Totals */}
                 <div className="col-span-4 flex flex-col justify-between text-[#292424] pl-1">
                   {/* Tax Computation Table */}
                   <div className="space-y-0.5 text-[10.5px]">
+                    {totalDiscountSavings > 0 && (
+                      <>
+                        <div className="flex justify-between text-gray-700 py-0.5 text-[10px]">
+                          <span>Gross Amount</span>
+                          <span className="font-mono text-[#292424]">
+                            ₹ {totalGrossOrigAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="flex justify-between py-0.5 text-[10.5px] font-bold text-emerald-700">
+                          <span>Discount Savings</span>
+                          <span className="font-mono">
+                            - ₹ {totalDiscountSavings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </>
+                    )}
+
                     <div className="flex justify-between text-gray-700 py-0.5">
                       <span>Taxable Amount</span>
                       <span className="font-mono font-semibold text-[#292424]">
@@ -446,37 +504,37 @@ export default function InvoiceTemplate({ bill, settings }) {
             )}
           </div>
 
-          {/* --- 100% FULL-WIDTH BRAND FOOTER RIBBON (EDGE TO EDGE) --- */}
-          <div className="w-full bg-[#043486] text-white py-2.5 px-7 mt-auto z-10 shrink-0">
-            <div className="flex items-center justify-between text-[10px] font-medium">
-
-              {/* Left: Phone & Email */}
-              <div className="space-y-0.5 shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full bg-white text-[#043486] flex items-center justify-center shrink-0">
-                    <Phone size={8.5} fill="#043486" />
-                  </div>
-                  <span className="font-semibold tracking-wide">+91 {companyPhone}</span>
+          {/* --- 100% FULL-WIDTH FOOTER RIBBON (EXACT SIMCHA LETTERHEAD DESIGN) --- */}
+          <div className="w-full bg-[#043486] text-white px-8 py-2.5 flex items-center justify-between text-[9.5px] font-medium tracking-wide z-10 shrink-0">
+            {/* Left Contact Pills */}
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-white text-[#043486] flex items-center justify-center shrink-0 shadow-xs">
+                  <Phone size={10} className="stroke-[2.5]" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full bg-white text-[#043486] flex items-center justify-center shrink-0">
-                    <Mail size={8.5} />
-                  </div>
-                  <span className="tracking-wide text-[9.5px]">{companyEmail}</span>
-                </div>
+                <span className="font-semibold tracking-wider font-mono">+91 {companyPhone}</span>
               </div>
-
-              {/* Center Slanted Divider */}
-              <div className="h-7 w-[1.5px] bg-white/40 rotate-[25deg] mx-4 shrink-0" />
-
-              {/* Right: Address */}
-              <div className="flex items-center gap-2 flex-1 max-w-lg">
-                <div className="w-4 h-4 rounded-full bg-white text-[#043486] flex items-center justify-center shrink-0">
-                  <MapPin size={8.5} fill="#043486" />
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-white text-[#043486] flex items-center justify-center shrink-0 shadow-xs">
+                  <Mail size={10} className="stroke-[2.5]" />
                 </div>
-                <span className="leading-tight text-[9.5px] text-blue-100">{companyAddress}</span>
+                <span className="tracking-wide">{companyEmail}</span>
               </div>
+            </div>
 
+            {/* Slanted Divider */}
+            <div className="h-5 w-[1px] bg-blue-300/40 transform rotate-12 mx-2" />
+
+            {/* Right Location Address */}
+            <div className="flex items-center gap-4 max-w-md text-right">
+              <div className="flex items-center gap-2 text-left">
+                <div className="w-5 h-5 rounded-full bg-white text-[#043486] flex items-center justify-center shrink-0 shadow-xs">
+                  <MapPin size={10} className="stroke-[2.5]" />
+                </div>
+                <span className="text-[9px] leading-tight text-blue-100 truncate max-w-xs">
+                  {companyAddress}
+                </span>
+              </div>
             </div>
           </div>
 

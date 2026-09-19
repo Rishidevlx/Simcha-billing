@@ -165,12 +165,15 @@ export default function CategoriesPage() {
       }
 
 
-      Swal.fire({
-        icon: 'success',
-        title: 'Deleted!',
-        text: `Category "${catName}" has been deleted.`,
+      Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
         timer: 2000,
-        showConfirmButton: false
+        timerProgressBar: true
+      }).fire({
+        icon: 'success',
+        title: `Category "${catName}" deleted successfully`
       })
 
       if (editingId === id) {
@@ -430,7 +433,7 @@ export default function CategoriesPage() {
                           <button
                             onClick={() => handleEdit(cat)}
                             title="Edit Category"
-                            className="p-1.5 rounded-sm text-blue-600 dark:text-blue-400 hover:text-white hover:bg-[#043486] dark:hover:bg-blue-600 border border-blue-200 dark:border-blue-800/60 transition-colors cursor-pointer"
+                            className="p-1.5 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-500 dark:hover:text-white border border-amber-200 dark:border-amber-800 rounded-none transition-all cursor-pointer shadow-2xs"
                           >
                             <Edit2 size={13} />
                           </button>

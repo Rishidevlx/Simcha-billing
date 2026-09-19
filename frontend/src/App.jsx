@@ -13,6 +13,7 @@ import CategoriesPage from './pages/CategoriesPage'
 import AddMaterialPage from './pages/AddMaterialPage'
 import AllMaterialsPage from './pages/AllMaterialsPage'
 import InventoryPage from './pages/InventoryPage'
+import ReturnsAdjustmentsPage from './pages/ReturnsAdjustmentsPage'
 import ProfileSettingsPage from './pages/ProfileSettingsPage'
 import SystemSettingsPage from './pages/SystemSettingsPage'
 import ConfigurationsSettingsPage from './pages/ConfigurationsSettingsPage'
@@ -123,6 +124,8 @@ export default function App() {
 
           {/* Inward Routes */}
           <Route path="inward" element={<InwardBillPage />} />
+          <Route path="inward/edit/:id" element={<InwardBillPage />} />
+          <Route path="inward/:id" element={<InwardBillPage />} />
           <Route path="inward-list" element={<InwardReportsPage />} />
           <Route path="inward-reports" element={<Navigate to="/inward-list" replace />} />
 
@@ -152,6 +155,9 @@ export default function App() {
           {/* Stock & Inventory Routes */}
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="stock" element={<Navigate to="/inventory" replace />} />
+          <Route path="inventory/returns" element={<ReturnsAdjustmentsPage />} />
+          <Route path="returns" element={<Navigate to="/inventory/returns" replace />} />
+          <Route path="returns-adjustments" element={<Navigate to="/inventory/returns" replace />} />
 
           {/* Settings Routes */}
           <Route

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   Building2,
   FileText,
@@ -8,12 +9,29 @@ import {
   UploadCloud,
   FileCheck,
   X,
-  CheckCircle2
+  CheckCircle2,
+  ArrowLeft
 } from 'lucide-react'
 import Swal from 'sweetalert2'
 import SearchableSelect from '../components/common/SearchableSelect'
 import InwardLineItems from '../components/inward/InwardLineItems'
 import { API_ENDPOINTS } from '../config/api'
+
+const getLocalDateString = (dateVal) => {
+  if (!dateVal) return ''
+  const d = new Date(dateVal)
+  if (isNaN(d.getTime())) {
+    if (typeof dateVal === 'string') {
+      const m = dateVal.match(/^(\d{4}-\d{2}-\d{2})/)
+      if (m) return m[1]
+    }
+    return ''
+  }
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 const INDIAN_STATES = [
   '01 - Jammu & Kashmir',
@@ -54,7 +72,13 @@ const INDIAN_STATES = [
   '38 - Ladakh'
 ]
 
-export default function InwardBillPage({ setActiveRoute }) {
+export default function InwardBillPage() {
+  const navigate = useNavigate()
+  const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const editId = id || searchParams.get('id')
+  const isEditMode = Boolean(editId)
+
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -65,7 +89,7 @@ export default function InwardBillPage({ setActiveRoute }) {
 
   // Inward Meta Specifications
   const [inwardNumber, setInwardNumber] = useState('INW-2026-01')
-  const [inwardDate, setInwardDate] = useState(new Date().toISOString().split('T')[0])
+  const [inwardDate, setInwardDate] = useState(getLocalDateString(new Date()))
 
   // Step 1: Supplier / Vendor Details
   const [supplierName, setSupplierName] = useState('')
@@ -109,21 +133,19 @@ export default function InwardBillPage({ setActiveRoute }) {
     }
   })
 
-  // Load Materials, Settings & Next Inward Number on component mount
+  // Load Materials, Settings & Next Inward Number (or Edit Inward Record) on component mount
   useEffect(() => {
     const loadInitialData = async () => {
       try {
         setIsLoading(true)
-        const [matRes, catRes, setRes, numRes] = await Promise.all([
+        const [matRes, catRes, setRes] = await Promise.all([
           fetch(API_ENDPOINTS.MATERIALS),
           fetch(API_ENDPOINTS.CATEGORIES),
-          fetch(API_ENDPOINTS.SETTINGS),
-          fetch(API_ENDPOINTS.NEXT_INWARD_NUMBER)
+          fetch(API_ENDPOINTS.SETTINGS)
         ])
         const matData = await matRes.json()
         const catData = await catRes.json()
         const setData = await setRes.json()
-        const numData = await numRes.json()
 
         if (matData.success && matData.materials) {
           setMaterials(matData.materials.filter(m => m.status === 'Active'))
@@ -134,8 +156,68 @@ export default function InwardBillPage({ setActiveRoute }) {
         if (setData.success && setData.settings) {
           setSettings(setData.settings)
         }
-        if (numData.success && numData.nextInwardNumber) {
-          setInwardNumber(numData.nextInwardNumber)
+
+        if (editId) {
+          // Fetch existing inward record for editing
+          const editRes = await fetch(API_ENDPOINTS.INWARD_BY_ID(editId))
+          const editData = await editRes.json()
+          if (editData.success && editData.inward) {
+            const inv = editData.inward
+            setInwardNumber(inv.inward_number || '')
+            setInwardDate(getLocalDateString(inv.inward_date))
+            setSupplierName(inv.supplier_name || '')
+            setSupplierPhone(inv.supplier_phone || '')
+            setSupplierEmail(inv.supplier_email || '')
+            setSupplierLocation(inv.supplier_location || '33 - Tamil Nadu')
+            setSupplierGstin(inv.supplier_gstin || '')
+            setHardcopyUrl(inv.hardcopy_url || '')
+
+            if (inv.items && inv.items.length > 0) {
+              setItems(inv.items.map(it => {
+                let serials = []
+                if (Array.isArray(it.serial_numbers_list)) {
+                  serials = it.serial_numbers_list
+                } else if (typeof it.serial_numbers === 'string') {
+                  try {
+                    serials = JSON.parse(it.serial_numbers)
+                  } catch (e) {
+                    serials = it.serial_numbers.split(',').map(s => s.trim()).filter(Boolean)
+                  }
+                }
+                return {
+                  id: it.id,
+                  material_id: it.material_id ? String(it.material_id) : '',
+                  item_name: it.item_name || '',
+                  description: it.description || '',
+                  hsn_code: it.hsn_code || '',
+                  quantity: parseFloat(it.quantity) || 1,
+                  unit: it.unit || 'NOS',
+                  rate: parseFloat(it.rate) || 0,
+                  amount: parseFloat(it.amount) || 0,
+                  has_serial: Boolean(it.has_serial),
+                  serial_numbers: serials.length > 0 ? serials : ['']
+                }
+              }))
+            }
+          } else {
+            Swal.fire({
+              icon: 'error',
+              title: 'Inward Entry Not Found',
+              text: 'Could not load the specified inward record for editing.',
+              confirmButtonColor: '#043486'
+            }).then(() => navigate('/inward-list'))
+          }
+        } else {
+          // New Inward: fetch next inward number
+          try {
+            const numRes = await fetch(API_ENDPOINTS.NEXT_INWARD_NUMBER)
+            const numData = await numRes.json()
+            if (numData.success && numData.nextInwardNumber) {
+              setInwardNumber(numData.nextInwardNumber)
+            }
+          } catch (numErr) {
+            console.error('Error fetching next inward number:', numErr)
+          }
         }
       } catch (err) {
         console.error('Error fetching data for inward bill:', err)
@@ -145,7 +227,7 @@ export default function InwardBillPage({ setActiveRoute }) {
     }
 
     loadInitialData()
-  }, [])
+  }, [editId])
 
   // Check if Place of Supply is Intra-State (Tamil Nadu)
   const isIntraState = supplierLocation.includes('33') || supplierLocation.toLowerCase().includes('tamil nadu')
@@ -618,7 +700,7 @@ export default function InwardBillPage({ setActiveRoute }) {
       }
     }
 
-    // 3. Save to backend API
+    // 3. Save to backend API (POST for new, PUT for edit)
     const saveInwardToBackend = async () => {
       try {
         setIsSaving(true)
@@ -655,8 +737,11 @@ export default function InwardBillPage({ setActiveRoute }) {
           }))
         }
 
-        const res = await fetch(API_ENDPOINTS.INWARDS, {
-          method: 'POST',
+        const url = isEditMode ? API_ENDPOINTS.INWARD_BY_ID(editId) : API_ENDPOINTS.INWARDS
+        const method = isEditMode ? 'PUT' : 'POST'
+
+        const res = await fetch(url, {
+          method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         })
@@ -664,34 +749,21 @@ export default function InwardBillPage({ setActiveRoute }) {
         const data = await res.json()
 
         if (data.success) {
-          const swalResult = await Swal.fire({
+          await Swal.fire({
             icon: 'success',
-            title: 'Inward Entry Saved!',
-            html: `Inward <b>#${data.inwardNumber || inwardNumber}</b> for <b>${supplierName}</b> with ${validItems.length} items (Total: <b>₹ ${grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>) saved successfully!`,
-            showCancelButton: true,
+            title: isEditMode ? 'Inward Entry Updated!' : 'Inward Entry Saved!',
+            html: isEditMode
+              ? `Inward <b>#${data.inwardNumber || inwardNumber}</b> for <b>${supplierName}</b> has been updated successfully!`
+              : `Inward <b>#${data.inwardNumber || inwardNumber}</b> for <b>${supplierName}</b> with ${validItems.length} items (Total: <b>₹ ${grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>) saved successfully!`,
             confirmButtonColor: '#043486',
-            cancelButtonColor: '#4b5563',
-            confirmButtonText: 'View Inward List',
-            cancelButtonText: 'Create Another Inward'
+            confirmButtonText: 'Go to Inward List'
           })
 
-          if (swalResult.isConfirmed) {
-            setActiveRoute('inward-reports')
-          } else {
-            handleReset()
-            // Fetch next inward number
-            try {
-              const nextRes = await fetch(API_ENDPOINTS.NEXT_INWARD_NUMBER)
-              const nextData = await nextRes.json()
-              if (nextData.success && nextData.nextInwardNumber) {
-                setInwardNumber(nextData.nextInwardNumber)
-              }
-            } catch (e) {}
-          }
+          navigate('/inward-list')
         } else {
           Swal.fire({
             icon: 'error',
-            title: 'Failed to Save Inward',
+            title: isEditMode ? 'Failed to Update Inward' : 'Failed to Save Inward',
             text: data.message || 'Error occurred while saving inward bill.',
             confirmButtonColor: '#043486'
           })
@@ -701,7 +773,7 @@ export default function InwardBillPage({ setActiveRoute }) {
         Swal.fire({
           icon: 'error',
           title: 'Server Error',
-          text: 'Failed to connect to backend server. Please check connection.',
+          text: err.message || 'Failed to connect to backend server. Please check connection.',
           confirmButtonColor: '#043486'
         })
       } finally {
@@ -718,17 +790,31 @@ export default function InwardBillPage({ setActiveRoute }) {
       {/* 1. Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-none border border-gray-200 dark:border-slate-800 shadow-sm transition-colors">
         <div className="flex items-center gap-3">
+          {isEditMode && (
+            <button
+              type="button"
+              onClick={() => navigate('/inward-list')}
+              className="p-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 rounded-none transition-colors cursor-pointer"
+              title="Back to Inward List"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
           <div>
-            <h1 className="text-xl font-bold text-[#292424] dark:text-white">Create Inward Bill</h1>
+            <h1 className="text-xl font-bold text-[#292424] dark:text-white">
+              {isEditMode ? `Edit Inward Bill (#${inwardNumber})` : 'Create Inward Bill'}
+            </h1>
             <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-              Record incoming stock, vendor shipments and purchase materials into your shop inventory.
+              {isEditMode
+                ? 'Update incoming stock quantities, supplier details, or serial numbers for this inward entry.'
+                : 'Record incoming stock, vendor shipments and purchase materials into your shop inventory.'}
             </p>
           </div>
         </div>
 
         {/* Keyboard Shortcuts Hint Bar */}
         <div className="hidden md:flex items-center gap-2 text-[11px] text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-950 px-3 py-1.5 border border-gray-200 dark:border-slate-800">
-          <span><kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 font-mono text-[10px] font-bold text-[#043486] dark:text-blue-400">Ctrl+Enter</kbd> Save</span>
+          <span><kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 font-mono text-[10px] font-bold text-[#043486] dark:text-blue-400">Ctrl+Enter</kbd> {isEditMode ? 'Update' : 'Save'}</span>
           <span>•</span>
           <span><kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 font-mono text-[10px] font-bold text-[#043486] dark:text-blue-400">Alt+A</kbd> Add Item</span>
           <span>•</span>
@@ -973,7 +1059,7 @@ export default function InwardBillPage({ setActiveRoute }) {
                   ) : (
                     <Save size={16} />
                   )}
-                  <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                  <span>{isSaving ? (isEditMode ? 'Updating...' : 'Saving...') : (isEditMode ? 'Update Inward' : 'Save')}</span>
                 </button>
 
                 <button

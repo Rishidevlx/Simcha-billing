@@ -296,19 +296,6 @@ export default function ServiceReceiptTemplate({ service, bill, settings }) {
                       </td>
                     </tr>
                   ))}
-
-                  {/* Empty Spacer Rows if under 5 items on last page */}
-                  {Array.from({ length: Math.max(0, 5 - page.items.length) }).map((_, i) => (
-                    <tr key={`empty-${i}`} className="h-10">
-                      <td className="border-r border-gray-300 text-center text-transparent">&nbsp;</td>
-                      <td className="border-r border-gray-300">&nbsp;</td>
-                      <td className="border-r border-gray-300">&nbsp;</td>
-                      <td className="border-r border-gray-300">&nbsp;</td>
-                      <td className="border-r border-gray-300">&nbsp;</td>
-                      <td className="border-r border-gray-300">&nbsp;</td>
-                      <td>&nbsp;</td>
-                    </tr>
-                  ))}
                 </tbody>
 
                 {page.isLastPage && (

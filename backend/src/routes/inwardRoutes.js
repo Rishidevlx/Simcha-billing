@@ -4,6 +4,7 @@ import {
   createInwardBill,
   getAllInwardBills,
   getInwardBillById,
+  updateInwardBill,
   deleteInwardBill
 } from '../controllers/inwardController.js'
 
@@ -13,6 +14,8 @@ router.get('/meta/next-number', getNextInwardNumber)
 router.post('/', createInwardBill)
 router.get('/', getAllInwardBills)
 router.get('/:id', getInwardBillById)
+router.put('/:id', updateInwardBill)
 router.delete('/:id', deleteInwardBill)
 
 export default router
+

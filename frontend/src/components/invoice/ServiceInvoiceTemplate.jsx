@@ -166,7 +166,7 @@ export default function ServiceInvoiceTemplate({ service, bill, settings }) {
             {/* Service Meta Bar */}
             <div className="bg-[#f3f4f6] border border-gray-300 px-3.5 py-1.5 flex items-center justify-between text-xs font-bold text-[#292424]">
               <div className="flex items-center gap-1.5">
-                <span className="text-gray-600 uppercase font-semibold text-[10.5px]">SERVICE NUMBER:</span>
+                <span className="text-gray-600 uppercase font-semibold text-[10.5px]">SERVICE INVOICE NUMBER:</span>
                 <span className="text-[#292424] font-mono text-sm font-black">{data.service_number || data.invoice_number}</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -285,19 +285,6 @@ export default function ServiceInvoiceTemplate({ service, bill, settings }) {
                       <td className="py-2 px-2.5 text-right font-mono font-bold align-top text-[#292424]">
                         {parseFloat(item.amount || (parseFloat(item.quantity || 0) * parseFloat(item.rate || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                    </tr>
-                  ))}
-
-                  {/* Empty Spacer Rows if under 5 items on last page */}
-                  {Array.from({ length: Math.max(0, 5 - page.items.length) }).map((_, i) => (
-                    <tr key={`empty-${i}`} className="h-10">
-                      <td className="border-r border-gray-300 text-center text-transparent">&nbsp;</td>
-                      <td className="border-r border-gray-300">&nbsp;</td>
-                      <td className="border-r border-gray-300">&nbsp;</td>
-                      <td className="border-r border-gray-300">&nbsp;</td>
-                      <td className="border-r border-gray-300">&nbsp;</td>
-                      <td className="border-r border-gray-300">&nbsp;</td>
-                      <td>&nbsp;</td>
                     </tr>
                   ))}
                 </tbody>
